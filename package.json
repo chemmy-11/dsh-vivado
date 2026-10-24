@@ -21,6 +21,7 @@
     "url": "git+https://github.com/chemmy-11/dsh-vivado.git"
   },
   "license": "SEE LICENSE IN LICENSE",
+  "icon": "./icon.png",
   "engines": {
     "node": ">=20"
   },

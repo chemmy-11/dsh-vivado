@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Vivado Workflow",
+    "description": "Adds a version-tiered Vivado session preset, 32 mcp__vivado__ tools and 8 skills (AMD official + first-party) to DeepSeek Harness on Windows."
+  }
+}

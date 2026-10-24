@@ -1,3 +1,5 @@
+<p align="center"><img src="icon.png" width="96" height="96" alt="dsh-vivado icon"></p>
+
 # dsh-vivado — a Vivado workflow pack for DeepSeek Harness
 
 [简体中文](README.md) | **English**

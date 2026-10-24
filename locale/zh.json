@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Vivado 工作环境",
+    "description": "为 DeepSeek Harness 装上 Vivado 会话预设（版本分档纪律）、32 个 mcp__vivado__ 工具与 8 个技能（AMD 官方 + 自研）。"
+  }
+}

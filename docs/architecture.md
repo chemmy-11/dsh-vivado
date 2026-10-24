@@ -128,6 +128,23 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 - 不打补丁的代价可量化：`xdc_lint` 默认 `max_items=20`、`get_cdc_report` 默认 `max_details=100`（`NOTICE` §2.1 表），大工程会静默少给明细；`run_tcl` / `safe_tcl` 也没有 `max_lines` / `save_full_to`。
 - doctor 判"补丁在不在"用的是**内容探针**（5 组 `Select-String -SimpleMatch` 源码标记），不是 mtime、也不是 `.bak` 文件：补丁重打后 mtime 毫无意义，而 `.bak-mcp-*` 备份反而会让"没打补丁"看起来像"打了"（`doctor.ps1:1035`、[doctor 详解](doctor-checks.md) §11）。
 
+## 8.5 显示元数据：图标与标题（插件列表里长什么样）
+
+bundle 在「设置 → 插件」里显示的标题、描述和图标**不来自渲染产物**，而是宿主从包本体读的
+（`@deepseek-ai/dsh-app-boot` 的 `readPluginMeta` / `iconOf`，2026-10-24 读源码确认）：
+
+| 显示项 | 来源 | 约束 |
+|---|---|---|
+| 标题 / 描述 | `locale/en.json` 的 `meta.title` / `meta.description`（缺省回退 `package.json` 的 `name` / `description`）；`locale/zh.json` 等同结构给中文 | 纯 JSON，UTF-8 |
+| 图标 | `package.json` 顶层 `icon`（相对清单目录，**优先于** `exports["./icon"]`） | SVG / PNG / JPEG / WebP，**≤ 256 KiB**，必须留在包目录内；绝对路径、URL、指向包外的软链会被拒绝 |
+| 生效方式 | 宿主把它读成 `data:` URL 交给前端渲染（卡片 48×48，详情页最大 320 高） | 改图标/标题后**重新 staging**（`install.ps1 -RenderOnly`）即可，不需要改 patch |
+
+本包的现役值：`icon.png`（512×512，基于 Vivado 三平面标志重上色为蓝色族，见 `NOTICE` §3.0 的授权说明）、
+`locale/en.json` = "Vivado Workflow"、`locale/zh.json` = "Vivado 工作环境"。
+
+> 换图标：替换 `icon.png`（保持 ≤256 KiB、留在包内）→ 重跑 `install.ps1 -RenderOnly` → 重开插件页面。
+> **不要**把图标放进渲染出的 `cordis.patch.yml`：显示元数据与 patch 是两条独立通路。
+
 ## 9. 已知限制
 
 1. **Electron 宿主下 `dsh-hmr` 不生效**：profile 与 bundle patch 只在宿主**启动时**读。换版本档位、改 `config.yml`、重装 bundle，全都要重启（`docs/install.md:11`）。

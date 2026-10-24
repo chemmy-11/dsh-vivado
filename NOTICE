@@ -114,6 +114,7 @@
 | `skills/{hw-ila-debug,hw-vio-debug,vivado-revision-control,vivado-rtl-elaboration-analysis,vivado-rtl-lint,vivado-simulate-rtl}/**`（AMD 官方技能） | **MIT**，© 2026 Advanced Micro Devices, Inc. | 附录 A；来源与改动见 §1 |
 | 取自 DeepSeek Harness 的 **22 条 shipped 插件行** | **MIT**，© 2026 DeepSeek | 附录 C；证据见 §3.1 |
 | `patches/vivado-mcp/*.patch` **所修改的上游代码**（`vivado-mcp` 0.3.26，本仓库不含其源码） | **Apache-2.0** | `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`；义务见 §2.1 |
+| `icon.png`（本包在插件列表里显示的图标） | **不属 MIT**：它是**基于 Vivado 三平面标志重上色**的二次创作；Vivado / Xilinx 标志的著作权与商标归 AMD | 只用于**指称**本包所服务的 Vivado 工具（见 §3.2）；如 AMD 提出异议将替换为不含其标志的原创图标；对外商业分发前建议先换成原创图形 |
 
 > 为什么要单列这张表：`LICENSE` 保持**纯 MIT 文本**（这样 GitHub 能识别为 MIT、工具链也认），
 > 而「MIT 只覆盖自有内容」这件事写在本 NOTICE 里——两处不冲突：MIT 的义务我们照做（附本文件+`LICENSE`），
