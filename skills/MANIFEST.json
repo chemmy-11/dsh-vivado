@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_by": "tools/gen_skills_manifest.py",
-  "source_hash": "18d52556c107eef216bda8c72542fa9e8700b29dd4315868b1b9c5e35861f6e4",
+  "source_hash": "507ff90c710be6243f4dfbfdced8511662cf37c76e89bb51248f9e2e044bc372",
   "tool_catalog": {
     "available": false,
     "source": "not-embedded",
