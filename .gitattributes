@@ -15,9 +15,10 @@
 
 # `skills/**` is VENDORED content: the six AMD skills are copied byte-for-byte from
 # vivado-ai-extension (MIT) so the NOTICE's "unmodified apart from 7 listed files" claim stays
-# verifiable. Disabling all conversion keeps those bytes exactly as shipped, and keeps
-# `tools/gen_skills_manifest.py --check` (which hashes SKILL.md bytes) stable on any platform.
-skills/**  -text
+# verifiable. Every upstream file is already LF, so pinning the checkout to LF keeps those bytes
+# identical AND keeps `tools/gen_skills_manifest.py --check` (which hashes SKILL.md bytes) stable
+# on any platform. Do not let a Windows checkout rewrite them to CRLF.
+skills/**  text eol=lf
 
 # Nothing binary is expected today; keep this explicit so a future asset does not get mangled.
 *.png    binary
