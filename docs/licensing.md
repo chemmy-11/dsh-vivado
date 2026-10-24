@@ -113,16 +113,21 @@
 
 ## 4. 我们自己的内容
 
-`LICENSE` 的定位：**同门/课题组内部使用**（restrictive-by-default），不是 OSI 开源许可。原因见任务书 T4——
-public 版的 SPDX 兼容性审查留到后续。**这不影响上面的合规性**：我们对第三方内容不主张任何额外权利，
-`LICENSE` §3 明确「第三方条款不受本文件影响，冲突时以第三方许可原文为准」。
+`LICENSE` 的定位：**MIT**（`Copyright (c) 2026 chemmy-11`），2026-10-24 随仓库公开一并切换。
+`LICENSE` 的「适用范围」一节明确：MIT **只覆盖我们原创的那部分**；§1（AMD MIT）、§2（vivado-mcp Apache-2.0）、
+§3.1（DeepSeek MIT）的第三方内容保留各自条款，本文件不为它们重新授权、也不改变它们。
+这与本文件 §0 的合规结论一致：三方许可互不冲突，MIT 内容的再分发不需要额外许可。
 
-### public 版发布前的待办（不是现在）
+### 公开版发布（2026-10-24 已执行 / 剩余项）
 
-1. 正式 SPDX 审查（AMD MIT + DeepSeek MIT + vivado-mcp Apache-2.0 + 我们自己的许可）；
-2. 决定我们自己内容的最终许可（若选 MIT，替换 `LICENSE` §1/§2 即可，第三方 carve-out 保留）；
-3. `skills/**` 的「本机适配注记」脱敏（含作者机器路径，`NOTICE` §1.3 已声明）；
-4. 把 4 个补丁按 §6 政策提上游 PR；上游接受后删除对应补丁并登记「已上游化」。
+| # | 事项 | 状态 |
+|---|---|---|
+| 1 | 三个上游许可查清并履行义务（本文件 §0） | ✅ 完成 |
+| 2 | 我们自己内容切换为 **MIT**（`LICENSE` 的 MIT 正文 + 第三方 carve-out 适用范围表） | ✅ 完成 |
+| 3 | `skills/**` 注记里的作者机器路径脱敏为 config 驱动占位符（`NOTICE` §1.3 记录） | ✅ 完成 |
+| 4 | 仓库由 private 转 **public**（`github.com/chemmy-11/dsh-vivado`），README 加 powered-by-dsh 与 Vivado 2023.1 徽章 | ✅ 完成 |
+| 5 | 4 个补丁按 `patches/vivado-mcp/README.md` §6 政策提上游 PR；上游接受后删补丁并登记「已上游化」 | ⬜ 待办（对外动作，需要人决定时机） |
+| 6 | （可选）正式 SPDX 扫描（如 `reuse` / `scancode`）作为机器复核 | ⬜ 未做：本文件是人工取证版，不替代工具扫描 |
 
 ---
 
@@ -134,7 +139,7 @@ public 版的 SPDX 兼容性审查留到后续。**这不影响上面的合规�
 | 2 | 外层 EULA §6/§7/§9.3 被 §4.1 视为适用 | 已在 `NOTICE` §3.2 与 `LICENSE` §4 写入无担保/责任限制口径 |
 | 3 | 商标指称（AMD/Xilinx/Vivado/DeepSeek） | nominative use，无 logo，`NOTICE` §3.2 声明无隶属/背书 |
 | 4 | 22 行插件行是否算「substantial portion」 | 即便按最保守解释也已保留 MIT 通知（附录 C）；且提供自抽取路径 |
-| 5 | 本审查非法律意见 | 结论只覆盖「事实 + 我们的动作」；public 前建议正式审查 |
+| 5 | 本审查非法律意见 | 结论只覆盖「事实 + 我们的动作」；已尽量把义务落成可复核的文件（附录 A/C、Apache 全文、carve-out 表），但正式发布前仍建议做一次工具化 SPDX 扫描 |
 
 ---
 
@@ -147,7 +152,7 @@ public 版的 SPDX 兼容性审查留到后续。**这不影响上面的合规�
 # ---------- 1) AMD：子树 MIT + 外层专有协议 + 上游仓库 ----------
 py -c "import zipfile;z=zipfile.ZipFile(r'%USERPROFILE%\Downloads\vivado-ai-extension-2026.9.1.vsix');print(z.read('extension/resources/plugin-bundled/LICENSE').decode()[:80])"
 py -c "import zipfile;z=zipfile.ZipFile(r'%USERPROFILE%\Downloads\vivado-ai-extension-2026.9.1.vsix');t=z.read('extension/LICENSE.txt').decode();i=t.find('4.1 Third-Party');print(t[i:i+520])"
-node C:\Users\15266\.agents\skills\github-account\scripts\gh.mjs api GET /repos/Xilinx/ross-ai-assistant
+node <github-account 技能目录>/scripts/gh.mjs api GET /repos/Xilinx/ross-ai-assistant
 
 # ---------- 2) DSH：MIT（两条都要看）----------
 #   app.asar 顶层 package.json -> license: MIT
@@ -158,9 +163,9 @@ Get-ChildItem D:\dsh -Filter *.txt | Select-Object Name
 py -c "import pathlib;[print(p.name) for p in pathlib.Path(r'D:\dsh\resources').glob('*') if p.suffix in ('.asar','.txt')]"
 
 # ---------- 3) vivado-mcp：Apache-2.0 + 上游无 NOTICE ----------
-py -c "import pathlib;print([l for l in pathlib.Path(r'D:\vivado-mcp\site\vivado_mcp-0.3.26.dist-info\METADATA').read_text(encoding='utf-8').splitlines() if l.startswith(('Name:','Version:','License-Expression:','Project-URL: Repository','Requires-Python:'))])"
-node C:\Users\15266\.agents\skills\github-account\scripts\gh.mjs api GET /repos/mapleleavessssssss-wq/vivado-mcp/license
-node C:\Users\15266\.agents\skills\github-account\scripts\gh.mjs api GET /repos/mapleleavessssssss-wq/vivado-mcp/contents   # 根目录无 NOTICE
+py -c "import pathlib;print([l for l in pathlib.Path(r'<vivado-mcp>\site\vivado_mcp-0.3.26.dist-info\METADATA').read_text(encoding='utf-8').splitlines() if l.startswith(('Name:','Version:','License-Expression:','Project-URL: Repository','Requires-Python:'))])"
+node <github-account 技能目录>/scripts/gh.mjs api GET /repos/mapleleavessssssss-wq/vivado-mcp/license
+node <github-account 技能目录>/scripts/gh.mjs api GET /repos/mapleleavessssssss-wq/vivado-mcp/contents   # 根目录无 NOTICE
 
 # ---------- 4) 本 kit 的履行物是否在位 ----------
 py -c "import hashlib,pathlib;b=pathlib.Path(r'<kit>\patches\vivado-mcp\LICENSE-APACHE-2.0.txt').read_bytes();print(len(b),hashlib.sha256(b).hexdigest())"

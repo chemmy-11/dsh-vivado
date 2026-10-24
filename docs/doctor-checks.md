@@ -39,7 +39,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
   `{id,title,status,detail,fix}` 五个字段（PASS 的 `fix` 为空串）。诊断信息走 stderr，不污染 stdout。
   单行是刻意为之：PS 5.1 把子进程输出**按行**管道化，多行 JSON 会让 `doctor.ps1 -Json | ConvertFrom-Json` 逐行解析而报错。
 * **编码**：所有 `*.ps1` 只含 ASCII（PS 5.1 按 ANSI 读脚本，非 ASCII 字面量会乱码）；中文说明只在本 `.md` 里。
-* **只读**：doctor 不写 profile、不写 Vivado、不写 `D:\vivado-mcp`、不需要管理员权限；唯一的外部动作是启动子进程。
+* **只读**：doctor 不写 profile、不写 Vivado、不写 `<vivado-mcp>`、不需要管理员权限；唯一的外部动作是启动子进程。
 
 **超时纪律**：所有外部命令都走 `Invoke-DoctorNative`（`System.Diagnostics.Process` + `WaitForExit(ms)`），超时后 `taskkill /T /F` 杀掉**整棵进程树**（`vivado.bat` 只是 `cmd` 外壳，里面还有 `loader.bat` → `vivado.exe`）。所以 doctor 不可能挂死。
 
@@ -98,9 +98,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 | PASS | ①②③④ 全过；detail 形如 `python 3.14.6 (>=3.10), CJK literal emitted as UTF-8, PYTHONUTF8=1 in the rendered patch` |
 | WARN | ①②③ 过、但 patch/template 里找不到 `PYTHONUTF8=1` |
 | FAIL | 路径为空 / 不存在 / 起不来 / `< 3.10` / UTF-8 探针失败（含超时） |
-| 修法 | `point \`python\` at a 3.10+ interpreter (e.g. the vivado-mcp venv: D:/vivado-mcp/venv/Scripts/python.exe)` |
+| 修法 | `point \`python\` at a 3.10+ interpreter (e.g. the vivado-mcp venv: <vivado-mcp>/venv/Scripts/python.exe)` |
 
-**为什么是 3.10**：vivado-mcp 0.3.26（`D:\vivado-mcp\site`，`Requires-Python: >=3.10`）自己就要 3.10+；
+**为什么是 3.10**：vivado-mcp 0.3.26（`<vivado-mcp>\site`，`Requires-Python: >=3.10`）自己就要 3.10+；
 低版本能"起"也跑不了这个 MCP。KIT-SPEC §7 #3 已同步为 3.10。
 
 **为什么单独验 UTF-8**：MCP 进程把 Vivado 的原始输出（含中文 WARNING/提示）原样回传；`PYTHONUTF8=1`
@@ -157,12 +157,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 |---|---|
 | 测什么 | 用 config 的 `python`，`PYTHONPATH=<vivado_mcp_site>` 能 `import vivado_mcp`，并打印 `__version__` / `__file__`；**`__file__` 必须落在 `vivado_mcp_site` 之下** |
 | 命令 | `$env:PYTHONPATH='<site>'; <python> -c "import vivado_mcp;print(getattr(vivado_mcp,'__version__',''));print(vivado_mcp.__file__)"`（超时 60 s） |
-| PASS | 退出码 0 且 `__file__` 以 `<site>\` 开头（大小写不敏感）；detail 形如 `version 0.3.26 from D:\vivado-mcp\site\vivado_mcp\__init__.py` |
+| PASS | 退出码 0 且 `__file__` 以 `<site>\` 开头（大小写不敏感）；detail 形如 `version 0.3.26 from <vivado-mcp>\site\vivado_mcp\__init__.py` |
 | WARN | `-Quick` 跳过 |
 | FAIL | site 为空/不存在、python 不可用、import 抛异常（detail 带 rc 与前两行错误）、或解析到 site **之外**（说明 sys.path 上有旧副本） |
 | 修法 | `set \`vivado_mcp_site\` to the directory that contains the \`vivado_mcp\` package (it is the \`site\` dir of the vivado-mcp install)` |
 
-`vivado_mcp_site` = 含 `vivado_mcp\` 包的那层目录（本机 `D:/vivado-mcp/site`），不是仓库根、不是 venv。
+`vivado_mcp_site` = 含 `vivado_mcp\` 包的那层目录（本机 `<vivado-mcp>/site`），不是仓库根、不是 venv。
 "解析到 site 之外"是特意加的：`pip install vivado_mcp` 过的解释器里，`import` 会成功但用的是另一份代码，
 补丁自然不在——这种"看起来 PASS 实际跑错版本"最难查。
 
@@ -181,7 +181,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 | 修法 | `fix \`python\` / \`vivado_mcp_site\`, or reinstall vivado-mcp` |
 
 本机实测：32 个（`check_bitstream_readiness` … `xdc_lint`），耗时约 3.7 s，所以放进了 `-Quick` 的跳过名单。
-`mcp_ctl.py` 必须在 site 的**上一级**（本机 `D:\vivado-mcp\mcp_ctl.py`）；找不到时 FAIL 的 detail 会指出这个布局约束。
+`mcp_ctl.py` 必须在 site 的**上一级**（本机 `<vivado-mcp>\mcp_ctl.py`）；找不到时 FAIL 的 detail 会指出这个布局约束。
 
 ---
 

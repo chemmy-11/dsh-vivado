@@ -14,7 +14,7 @@
 D:\dsh-vivado\
 ```
 
-**不要**往 vault（`<vault>\.dsh\`）或 `D:\FPGA` 其它目录写东西。
+**不要**往 vault（`<vault>\.dsh\`）或 `<project_root>` 其它目录写东西。
 **不要**改在有 desktop profile（`<DSH_HOME>\profiles\desktop\`）。
 **不要** git commit、不要 `plugin_manager` 安装到在用的 desktop profile（Lead 负责受控测试）。
 
@@ -38,7 +38,7 @@ D:\dsh-vivado\
 | `docs/version-matrix.md` | **ps-docs** | 版本真值分档表（T4） |
 | `patches/vivado-mcp/**` | **ps-docs** | 3 个 MCP 补丁的 `.patch` 归档 + README |
 
-共享只读：`D:\FPGA\.tmp\kit-recon-2026-10-24\`（asar 取证的官方文档副本，`refs/`、`pkg-skillfs/`）
+共享只读：`<project_root>\.tmp\kit-recon-2026-10-24\`（asar 取证的官方文档副本，`refs/`、`pkg-skillfs/`）
 
 ## 3. 产物运行时形态（必须理解，别自作主张）
 
@@ -69,8 +69,8 @@ part: xcku060-ffva1156-2-i          # 器件
 project_root: D:/FPGA               # 工程根（必须 ASCII）
 vivado_version: 2023.1              # 决定 persona 版本分档
 vivado_path: D:/Xilinx/Vivado/2023.1/bin   # 含 vivado.bat 的 bin 目录
-python: D:/vivado-mcp/venv/Scripts/python.exe   # 跑 vivado-mcp 的解释器
-vivado_mcp_site: D:/vivado-mcp/site        # PYTHONPATH
+python: <vivado-mcp>/venv/Scripts/python.exe   # 跑 vivado-mcp 的解释器
+vivado_mcp_site: <vivado-mcp>/site        # PYTHONPATH
 vivado_mcp_cwd: D:/FPGA                    # MCP server 的 cwd（必须 ASCII）
 temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
 ```
@@ -102,9 +102,9 @@ shipped 逐字节一致，见结论 §2.2）；Lead 会把它落到 `templates/s
    - 不用 `??`/`?.`/三元（PS7 才有）；不用 `ConvertFrom-Json -AsHashtable`；
    - 文件编码 **UTF-8 无 BOM**，但**脚本里的中文字符串必须能过 PS5.1**：为避 GBK 乱码，
      **PS 脚本（*.ps1）一律用英文输出**，中文说明放 `.md`。
-   - 路径优先纯 ASCII（dist 在 `D:\FPGA\dist\`，满足）。
+   - 路径优先纯 ASCII（dist 在 `<project_root>\dist\`，满足）。
 6. 幂等：`install.ps1` 跑两次结果一致；`uninstall.ps1` 可把 profile 还原到备份状态。
-7. 不改第三方源码（`D:\vivado-mcp\site` 只读）；补丁只以 `.patch` 文件随包。
+7. 不改第三方源码（`<vivado-mcp>\site` 只读）；补丁只以 `.patch` 文件随包。
 
 ## 7. doctor.ps1 必须覆盖（每项 PASS/WARN/FAIL + 一句可执行修法）
 
@@ -131,7 +131,7 @@ shipped 逐字节一致，见结论 §2.2）；Lead 会把它落到 `templates/s
 
 - 每步带证据；改动他人文件前先 `send_message` 给 Lead。
 - 备份惯例 `*.bak-<YYYYMMDD>`；**不要在 dist 里留备份文件**（会进包），备份放
-  `D:\FPGA\.tmp\kit-recon-2026-10-24\backups\`。
+  `<project_root>\.tmp\kit-recon-2026-10-24\backups\`。
 - 完成后把**证据报告**写到 `<vault>\.vivado-scratch\kit-2026-10-24\reports\<名字>.md`
   （不写进 dist），并在 `send_message` 里给 Lead 一段 ≤15 行摘要（含命令原文与关键输出）。
 - 遇到阻塞（缺事实/契约不清）立刻问 Lead，不要猜着写。

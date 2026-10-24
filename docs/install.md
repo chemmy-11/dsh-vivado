@@ -54,7 +54,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 `
    - `vivado_path`：在 `D:\Xilinx`、`C:\Xilinx`、`E:\Xilinx`、`%ProgramFiles%\Xilinx`（及各自的 `Vivado\` 子目录）里找 `<版本>\bin\vivado.bat`，**不做全盘扫描**；优先匹配 `vivado_version`。
    - `vivado_version`：取上面找到的版本目录名；没有就从 `vivado_path` 的父目录名推。
    - `python`：`py -3 -c "import sys;print(sys.executable)"`，再 `where python`。
-   - `vivado_mcp_site`：从 python 路径推 `<venv>\..\..\site` / `<venv>\..\site`，再试 `D:\vivado-mcp\site`、`C:\vivado-mcp\site`；命中要求目录存在。
+   - `vivado_mcp_site`：从 python 路径推 `<venv>\..\..\site` / `<venv>\..\site`，再试 `<vivado-mcp>\site`、`C:\vivado-mcp\site`；命中要求目录存在。
    - `project_root` / `vivado_mcp_cwd` / `temp_dir` 为空才补（`project_root` 取当前目录，另两个从它派生）。
    - `part` 仍为空：`-NonInteractive` 直接失败并给一句修法；否则 `Read-Host`（默认值取 `config.example.yml` 的 part）。
    - **ASCII 守卫**：`-StageDir`、`skills`、`project_root`、`vivado_mcp_cwd`、`temp_dir` 只要含非 ASCII 字符就**立刻失败**并给修法（Vivado 的 Tcl 层会因此出错）。
@@ -92,8 +92,8 @@ part: xcku060-ffva1156-2-i          # 器件
 project_root: D:/FPGA               # 工程根（Vivado cwd，必须 ASCII）
 vivado_version: 2023.1              # 决定 persona 版本分档（<2025.2 → 2023.1 档）
 vivado_path: D:/Xilinx/Vivado/2023.1/bin   # 含 vivado.bat 的 bin 目录
-python: D:/vivado-mcp/venv/Scripts/python.exe
-vivado_mcp_site: D:/vivado-mcp/site        # PYTHONPATH
+python: <vivado-mcp>/venv/Scripts/python.exe
+vivado_mcp_site: <vivado-mcp>/site        # PYTHONPATH
 vivado_mcp_cwd: D:/FPGA                    # MCP server 的 cwd（必须 ASCII）
 temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
 ```
@@ -262,5 +262,5 @@ REM 3) 重启 DeepSeek Harness
 4. **`--dump-config` 不校验 `compatibility.json`**（§4）：所以安装器的 4 条判据不能替代 doctor 的 MCP 检查。
 5. **`-SkipCompatibility` 的取舍**（§4）。
 6. **卸载不动 `compatibility.json`**（§6.1 第 4 条）。
-7. 安装器**不打包 Vivado 本体/许可证**，不代签 AMD 协议，不改 `D:\vivado-mcp\site` 的第三方源码。
+7. 安装器**不打包 Vivado 本体/许可证**，不代签 AMD 协议，不改 `<vivado-mcp>\site` 的第三方源码。
 8. 本机实测环境：Windows 10.0.26200 / `powershell.exe` **5.1.26100** / DSH **0.2.1-rc.2**（`D:\dsh`）/ 探针 `DSH_HOME=<tmp>\dshprobe-home`，profile `probe`。**所有命令都用 `powershell.exe`(5.1) 跑过，未使用 `pwsh`。**

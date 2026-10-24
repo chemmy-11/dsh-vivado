@@ -1,51 +1,44 @@
-# dsh-vivado LICENSE（内部版 v0 · 2026-10-24）
+MIT License
 
-适用对象：`dsh-vivado` 中由本 kit 维护者**原创**的内容（`NOTICE` §3 表里标「自研」的文件：bundle 清单、安装/卸载/体检脚本、渲染与清单工具、模板、persona 片段、文档、`patches/vivado-mcp/*` 补丁文本与说明、`skills/amd-doc-search/**`、`skills/vivado-workflow-discipline/**`）。
+Copyright (c) 2026 chemmy-11
 
-**不适用**于第三方内容 —— AMD 官方 6 件技能（MIT）、`vivado-mcp`（Apache-2.0，本 kit 不含其源码）、DSH 安装包自带的配置数据（`NOTICE` §3.1）。本文件**不重新许可、不改变**它们的条款；它们的条款见 `NOTICE`。
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-## 1. 授予（同门 / 课题组内部使用）
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-在你**有权代表其行事的课题组 / 同门范围**内，你可以免费：
-
-- 使用、复制本 kit；
-- 修改本 kit，并在此基础上创作；
-- 在同一课题组 / 同门范围**内部**再分发（含随论文、答辩材料、内部仓库）。
-
-**条件**：任何副本或实质部分都必须保留本 `LICENSE` 与 `NOTICE`（含 `NOTICE` 附录 A 的 MIT 全文）。
-
-## 2. 限制（本版不是开源许可）
-
-未经书面许可，**不得**把本 kit（或其实质部分）**对外公开发布**，包括但不限于：公开代码托管仓库、公开网盘/下载站、对课题组外分发、商业化分发或作为商业产品的一部分。
-
-原因：任务书 T4 已明确 —— **public / 开源版的 SPDX 与许可兼容性审查留到后续**。在该审查完成之前，本文件**不是** OSI 意义上的开源许可，请**不要**把本 kit 当开源项目引用或转授。
-
-## 3. 第三方条款不受影响（重要）
-
-| 内容 | 许可 | 你要做什么 |
-|---|---|---|
-| `skills/` 下 AMD 官方 6 件技能 | **MIT**（© 2026 Advanced Micro Devices, Inc.，全文见 `NOTICE` 附录 A） | 保留版权与许可声明；我们对文件的改动见 `NOTICE` §1.3 |
-| `vivado-mcp`（第三方，本 kit **不包含**其源码，只提供 `.patch`） | **Apache-2.0**（上游仓库见 `NOTICE` §2；**许可证全文随包**：`patches/vivado-mcp/LICENSE-APACHE-2.0.txt`） | 自己 `pip install vivado-mcp==0.3.26`；应用补丁后的修改版由你负责遵守 Apache-2.0（尤其 §4(b)「标明已修改」，`patches/vivado-mcp/README.md` §3.5 有一行现成标记） |
-| DSH（DeepSeek Harness）安装包自带的 22 行 shipped 插件配置数据 | **MIT**（© 2026 DeepSeek；`@deepseek-ai/dsh-desktop` 与 `@deepseek-ai/dsh-web-app` 的 `package.json` 均为 `"license": "MIT"`，全文见 `NOTICE` 附录 C） | 保留版权与许可声明（本 kit 已在 `NOTICE` §3.1 + 附录 C 履行） |
-
-若本文件任何表述与上述第三方许可冲突，**以第三方许可原文为准**；本文件只约束本 kit 维护者的原创内容。
-
-## 4. 无担保
-
-本 kit 按「现状」提供，**不附带任何明示或默示担保**（包括但不限于适销性、特定用途适用性、不侵权）。使用本 kit 产生的任何后果（含 Vivado 工程损坏、许可失效、数据丢失）由使用者自行承担；请先用 `doctor.ps1` 体检并在副本上试装。
-
-## 5. 元数据字段不影响授权
-
-各 `SKILL.md` 的 frontmatter 里有 `license:` 字段，但**性质由内容归属决定**，都不是本文件的授权来源：
-
-| 内容 | `license:` 字段 | 含义 |
-|---|---|---|
-| `skills/` 下 **AMD 官方 6 件**（`hw-ila-debug`、`hw-vio-debug`、`vivado-revision-control`、`vivado-rtl-elaboration-analysis`、`vivado-rtl-lint`、`vivado-simulate-rtl`） | `MIT` | **真实的第三方许可声明**：这 6 件按 MIT 授权（© Advanced Micro Devices, Inc.，全文见 `NOTICE` 附录 A）；字段只是如实重述，授权来自 MIT 本身、不来自本文件 |
-| `skills/vivado-workflow-discipline/SKILL.md` | `NOASSERTION` | **本 kit 自研内容**：不另行断言任何许可证，授权只按本文件执行 |
-| `skills/amd-doc-search/SKILL.md` | （无该字段） | 同上：自研内容，只按本文件 |
-
-**本文件优先**：除上表 AMD 6 件的 MIT 外，本 kit 原创内容的授权一律以本文件为准；`license:` 字段本身**不构成**本文件之外的额外授权，`NOASSERTION` 也**不是**「无版权」或「公有领域」。公开版发布前，自研技能的字段会与本文件的最终许可统一。
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ---
 
-*public 版待办：①SPDX 兼容性审查（AMD MIT + vivado-mcp Apache-2.0 + DSH 配置数据）；②决定本 kit 自有内容的最终许可（若选 MIT，需要把本文件整体替换并同步各 SKILL.md 的 `license:` 字段）；③脱敏 `skills/` 中的本机适配注记。*
+# 适用范围（重要：MIT 只覆盖我们原创的那部分）
+
+上面这段 MIT 授权覆盖**本仓库中由维护者原创的内容**：`package.json`、`install.ps1`、
+`uninstall.ps1`、`doctor.ps1`、`lib/**`、`tools/**`、`templates/**`、`docs/**`、
+`skills/amd-doc-search/**`、`skills/vivado-workflow-discipline/**`、
+`patches/vivado-mcp/README.md` 与 `patches/vivado-mcp/0001..0004*.patch`（补丁文本与说明）、
+以及 `README.md` / `NOTICE` / 本文件。
+
+**它不覆盖、也不改变**下列第三方内容的许可 —— 它们各有各的条款，本文件不为它们重新授权：
+
+| 内容 | 许可 | 条款与证据 |
+|---|---|---|
+| `skills/{hw-ila-debug,hw-vio-debug,vivado-revision-control,vivado-rtl-elaboration-analysis,vivado-rtl-lint,vivado-simulate-rtl}/**`（AMD 官方技能） | **MIT**，© 2026 Advanced Micro Devices, Inc. | 全文见 `NOTICE` 附录 A；来源与我们的改动见 `NOTICE` §1 |
+| 取自 DeepSeek Harness 的 **22 条 shipped 插件行**（`templates/preset.patch.yml.tmpl` 与审计件） | **MIT**，© 2026 DeepSeek | 全文见 `NOTICE` 附录 C；证据见 `NOTICE` §3.1 |
+| `patches/vivado-mcp/*.patch` **所修改的上游代码**（`vivado-mcp` 0.3.26，第三方，本仓库不含其源码） | **Apache-2.0** | 全文见 `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`；义务见 `NOTICE` §2.1 |
+
+**本仓库不包含**：Vivado 本体与许可证、AMD entitlement、任何密钥/token、`vivado-mcp` 源码、DSH 运行时或界面代码。
+
+商标：`AMD` / `Xilinx` / `Vivado` / `DeepSeek Harness` 等名称仅用于指称对应产品或服务，
+商标权归各自权利人；本项目与它们无隶属、赞助或背书关系（`NOTICE` §3.2）。

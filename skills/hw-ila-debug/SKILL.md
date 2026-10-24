@@ -1,6 +1,6 @@
 ---
 name: hw-ila-debug
-description: "Interact with ILA debug cores via vivado-mcp or chipscope-mcp. Discover cores, configure triggers, arm, capture, upload, export waveform data (CSV/VCD), and analyze results. ILA in vivado-mcp supports every device family supported by Vivado. chipscope-mcp supports Versal only. Use when user asks to \"capture ILA data\", \"set ILA trigger\", \"trigger on signal\", \"export waveform\", \"arm ILA\", or \"trigger immediately\". 本工作区注（2026-10-24 修订）：vivado-mcp 已配置为 mcp__vivado__*（32 工具，需重启宿主后生效）；当前会话若工具清单里没有 mcp__vivado__ 前缀，则走 D:/vivado-mcp/mcp_ctl.py CLI 桥或 Vivado batch Tcl（详见文首本机适配注记）。"
+description: "Interact with ILA debug cores via vivado-mcp or chipscope-mcp. Discover cores, configure triggers, arm, capture, upload, export waveform data (CSV/VCD), and analyze results. ILA in vivado-mcp supports every device family supported by Vivado. chipscope-mcp supports Versal only. Use when user asks to \"capture ILA data\", \"set ILA trigger\", \"trigger on signal\", \"export waveform\", \"arm ILA\", or \"trigger immediately\". 本工作区注（2026-10-24 修订）：vivado-mcp 已配置为 mcp__vivado__*（32 工具，需重启宿主后生效）；当前会话若工具清单里没有 mcp__vivado__ 前缀，则走 <vivado-mcp>/mcp_ctl.py CLI 桥或 Vivado batch Tcl（详见文首本机适配注记）。"
 license: MIT
 compatibility: Requires Vivado 2026.1+, hardware with an ILA core, and access to either vivado-mcp or chipscope-mcp.
 metadata:
@@ -18,12 +18,12 @@ artifacts:
 
 > **本机适配注记（非 AMD 原文；2026-10-18 由 DSH 会话追加）**
 >
-> - 工具链不同：本机用**第三方 vivado-mcp**（现役安装 `D:\vivado-mcp`，32 个工具；仓库内 `D:\FPGA\vivado-mcp` 是零改动随仓副本、**不是运行实例**），不是官方 `vivado-mcp-server`。
+> - 工具链不同：本机用**第三方 vivado-mcp**（现役安装 `<vivado-mcp>`，32 个工具；仓库内 `<EIF 仓库>\vivado-mcp` 是零改动随仓副本、**不是运行实例**），不是官方 `vivado-mcp-server`。
 > - 工具映射：`vivadoExecute`/`vivado_execute`→`run_tcl`/`safe_tcl`；`vivado_start`→`start_session`；`vivado_stop`→`stop_session`；`vivado_list_sessions`→`list_sessions`；`vivado_status`→`get_run_progress`；`vivado_log_messages`→`get_critical_warnings`（仅 runme.log）或 `read`/`grep`；`read_file`→`read`；`create_file`→`write`；`replace_string_in_file`→`edit`；`file_search`→`glob`；`grep_search`→`grep`；`run_in_terminal`→`pwsh`；`runSubagent`→`subagent`。
-> - 会话没挂 MCP 工具时走 CLI 桥：`python D:\vivado-mcp\mcp_ctl.py session "<多行 Tcl>"`（等价 run_tcl）、`call <tool> --args-file <json>`、`list`。**一次调用一个 MCP 进程**，多步会话必须写成单次 `session`。
-> - 版本事实：Vivado **2023.1**（官方基线 2026.1）；Python 用 `C:\Users\15266\AppData\Local\Python\pythoncore-3.14-64\python.exe`。
-> - 文档检索：本机无 `vivado_doc_search`，改用 `web_fetch`（docs.amd.com / 官方 docs）或本项目 `D:\FPGA\docs`。
-> - 硬约束：MCP 安装路径必须纯 ASCII（中文路径经 Vivado Tcl GBK 解码会坏）；客户端必须**显式**设 `PYTHONPATH=D:\vivado-mcp\site`，否则 venv 的 `_mcp_pilot_paths.pth` 会命中 `.mcp-pilot` 中文路径副本，导致 `start_session` 静默失败；Vivado 会话与综合/实现/仿真全局串行。
+> - 会话没挂 MCP 工具时走 CLI 桥：`python <vivado-mcp>\mcp_ctl.py session "<多行 Tcl>"`（等价 run_tcl）、`call <tool> --args-file <json>`、`list`。**一次调用一个 MCP 进程**，多步会话必须写成单次 `session`。
+> - 版本事实：Vivado **2023.1**（官方基线 2026.1）；Python 用 `<python 解释器：见 config.yml 的 python（install.ps1 写入实际值）>`。
+> - 文档检索：本机无 `vivado_doc_search`，改用 `web_fetch`（docs.amd.com / 官方 docs）或本项目 `<project_root>\docs`。
+> - 硬约束：MCP 安装路径必须纯 ASCII（中文路径经 Vivado Tcl GBK 解码会坏）；客户端必须**显式**设 `PYTHONPATH=<vivado-mcp>\site`，否则 venv 的 `_mcp_pilot_paths.pth` 会命中 `.mcp-pilot` 中文路径副本，导致 `start_session` 静默失败；Vivado 会话与综合/实现/仿真全局串行。
 
 <!--
 Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.

@@ -1,5 +1,12 @@
 # dsh-vivado — Vivado 工作环境的 DSH 聚合包（preset + MCP 工具 + 技能）
 
+[![powered by dsh](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
+![Vivado 2023.1](https://img.shields.io/badge/Vivado-2023.1%20tested-BE1E2D?style=flat-square&logo=amd&logoColor=white)
+![Vivado 2025.2+](https://img.shields.io/badge/Vivado-2025.2%2B%20unverified-9e9e9e?style=flat-square)
+![MCP tools](https://img.shields.io/badge/MCP%20tools-32-6E4AFF?style=flat-square)
+![platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)
+![license](https://img.shields.io/badge/license-MIT-3DA639?style=flat-square)
+
 一句话：**一条命令 + 一次重启**，把「Vivado 专用会话预设 + AMD 官方 6 个技能 + 自研工作流纪律 + 已打补丁的 `vivado-mcp`（32 工具）」装进你自己的 DeepSeek Harness。
 
 它**不包含**：Vivado 本体、Vivado 许可证、AMD 账号/entitlement、任何密钥或 token；也**不代签**任何 AMD 协议。
@@ -27,16 +34,16 @@
 | DeepSeek Harness | **桌面版 ≥ 0.2.1-rc.2**（Electron） | 宿主「关于」；`<安装目录>\resources\runtime\cli\bin\dsh.cmd --version` |
 | Vivado | 已安装且 `vivado.bat` 可执行；**2023.1 已实测**，`2025.2+` 未实测（见 §6） | `vivado -version`；目录里存在 `<安装>\Vivado\<版本>\bin\vivado.bat` |
 | Python | **≥ 3.10**（`vivado-mcp` 0.3.26 声明 `Requires-Python: >=3.10`；kit 自身脚本只需标准库） | `py -c "import sys;print(sys.version)"` |
-| vivado-mcp | 已 `pip install vivado-mcp==0.3.26` 到**纯 ASCII 目录**（如 `D:\vivado-mcp\site`），且能 `import vivado_mcp` | `py -c "import vivado_mcp"`（需先设 `PYTHONPATH`） |
+| vivado-mcp | 已 `pip install vivado-mcp==0.3.26` 到**纯 ASCII 目录**（如 `<vivado-mcp>\site`），且能 `import vivado_mcp` | `py -c "import vivado_mcp"`（需先设 `PYTHONPATH`） |
 | 器件/工程 | 你的 part 与工程根路径（ASCII） | 见 `config.yml` |
 | 许可 | 你自己合法的 Vivado license（本 kit 不分发、不破解） | `XILINXD_LICENSE_FILE` 或 license 文件 |
 
-> 本机参考值（仅作示例，别照抄）：Windows 11、DSH 0.2.1-rc.2、Vivado 2023.1、Python 3.14（venv）、`vivado-mcp` 0.3.26 装在 `D:\vivado-mcp`、part `xcku060-ffva1156-2-i`、工程根 `D:\FPGA`。
+> 本机参考值（仅作示例，别照抄）：Windows 11、DSH 0.2.1-rc.2、Vivado 2023.1、Python 3.14（venv）、`vivado-mcp` 0.3.26 装在 `<vivado-mcp>`、part `xcku060-ffva1156-2-i`、工程根 `<project_root>`。
 
 ## 2. 一键安装
 
 ```powershell
-git clone git@github.com:chemmy-11/dsh-vivado.git   # 或解压收到的压缩包
+git clone https://github.com/chemmy-11/dsh-vivado.git   # 或下载 GitHub 的 zip
 cd dsh-vivado
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
@@ -101,7 +108,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
    - 工具总数取决于 DSH 版本：本机 0.2.1-rc.2 的 Vivado 预设会话实测 **97**（65 非 MCP + 32 MCP）。旧资料里的 `91 = 59 + 32` 是旧 profile 口径，**增量 32 才是稳定判据**。
    - 「列一下你能看到的技能」→ 8 个（AMD 6 + 自研 2）。
 3. 典型任务照旧说人话即可，例如：
-   - 「打开 `D:\FPGA\prj\project_1\project_1.xpr`，看综合状态和资源」；
+   - 「打开 `<project_root>\prj\project_1\project_1.xpr`，看综合状态和资源」；
    - 「用 `xdc_lint` 检查 `constraints_1` 下的 XDC（默认要全量明细）」；
    - 「跑综合，用 `wait=false` 起，然后轮询进度」。
 4. 长任务的正确姿势（写进 persona 的纪律）：`run_synthesis` / `run_implementation` 用 `wait: false` → `get_run_progress` 轮询；不要一个 turn 干等 40 分钟。
@@ -169,7 +176,7 @@ Remove-Item -Recurse -Force $env:USERPROFILE\.dsh\bundles\dsh-vivado
 
 ## 7. `vivado-mcp` 的 4 个本地补丁（**默认不自动打**）
 
-本 kit 的安装器**不修改** `D:\vivado-mcp\site` 里的第三方源码（红线：不改第三方源码、不做私有分支），所以补丁需要你**显式**应用：
+本 kit 的安装器**不修改** `<vivado-mcp>\site` 里的第三方源码（红线：不改第三方源码、不做私有分支），所以补丁需要你**显式**应用：
 
 - 不打补丁：32 工具照常可用；但 `xdc_lint` / `get_cdc_report` 保持上游默认裁剪（`max_items=20` / `max_details=100`），大工程会**静默少给你明细**（`PITFALLS.md:86`，坑 #76）。
 - 打补丁：检查类工具默认**全量**，并且 `run_tcl` / `safe_tcl` 可选用 `max_lines` / `save_full_to`（默认不裁剪，关键 `ERROR` 行不丢）。
@@ -193,7 +200,7 @@ Remove-Item -Recurse -Force $env:USERPROFILE\.dsh\bundles\dsh-vivado
 | AMD 官方 6 件技能（`skills/` 里那 6 个目录） | **MIT**（© 2026 AMD） | 保留版权+许可声明、标明我们的改动 | `NOTICE` §1 + 附录 A；`docs/licensing.md` §1 |
 | 取自 DeepSeek Harness 的 22 条预设插件行 | **MIT**（© 2026 DeepSeek） | 保留版权+许可声明 | `NOTICE` §3.1 + 附录 C；`docs/licensing.md` §2 |
 | vivado-mcp 的 4 个补丁 | 改的是 **Apache-2.0** 代码 | 随附许可证全文、标明「已修改」 | `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`、README §3.5 |
-| 本仓库自己的代码/文档 | 见 `LICENSE`（同门内部使用，public 版待审查） | 第三方条款优先于本文件 | `LICENSE` §3/§5 |
+| 本仓库自己的代码/文档 | **MIT**（© 2026 chemmy-11） | 保留版权+许可声明 | `LICENSE`（MIT 正文 + 「适用范围」carve-out 表） |
 
 - **不随包分发**：Vivado 本体与许可证、AMD entitlement、任何密钥、`vivado-mcp` 源码、DSH 运行时/CLI/UI 代码。
 - 与 AMD / Xilinx / DeepSeek **无隶属或背书关系**；名称仅为指称（`NOTICE` §3.2）。

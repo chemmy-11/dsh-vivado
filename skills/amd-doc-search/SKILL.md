@@ -1,6 +1,7 @@
 ---
 name: amd-doc-search
 description: 检索 AMD/Xilinx 官方文档（Vivado/Vitis/UG/PG/Answer Record 等 612K+ 页，可按器件系列与版本过滤）。当问题涉及 Vivado Tcl 命令、UG901/UG906/UG949、时序/CDC/AXI/Aurora/MIG 等需要官方文档依据时使用：运行 `py <本技能目录>\doc_search.py "<query>"`，并引用返回的 docs.amd.com 链接。
+license: MIT
 metadata:
   version: "1.0.0"
 baseline:
@@ -21,14 +22,14 @@ baseline:
 - 与本项目资料冲突、或本机文档没有覆盖时，用官方文档做交叉验证（契合 AGENTS.md 的 L0–L4 依据等级：官方文档可作 L3/L4 溯源）。
 
 **何时不用**：
-- 查正点原子 KU060 板卡手册/例程、本项目调试记录/坑账本 → 直接读 `D:\FPGA\docs`、`D:\FPGA\AGENTS.md`（本服务只有 AMD 英文文档，不含第三方/中文资料）。
+- 查正点原子 KU060 板卡手册/例程、本项目调试记录/坑账本 → 直接读 `<project_root>\docs`、`<project_root>\AGENTS.md`（本服务只有 AMD 英文文档，不含第三方/中文资料）。
 - 涉及未公开设计细节、需要保密时 → 不要用（query 会发到 AMD 服务）。
 
 ## 用法（PowerShell，工作目录任意）
 
 ```powershell
-$py = "C:\Users\15266\AppData\Local\Python\pythoncore-3.14-64\python.exe"
-$s  = "C:\Users\15266\Desktop\毕设\.dsh\skills\amd-doc-search\doc_search.py"
+$py = "<python 解释器：见 config.yml 的 python（install.ps1 写入实际值）>"
+$s  = "<本技能目录>\doc_search.py"
 
 & $py $s "incremental implementation compile UG904" --limit 3
 & $py $s "ILA trigger setup" --family "Kintex UltraScale+" --limit 5

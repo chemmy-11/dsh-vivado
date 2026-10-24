@@ -6,28 +6,32 @@
 
 ---
 
+> **读法（公开版）**：文中出现的 `<project_root>` = 你在 `config.yml` 里配置的工程根；`<vivado-mcp>` = 你的 vivado-mcp 安装目录；
+> `PITFALLS.md` / `AGENTS.md` 指公开的工程笔记仓库 [`chemmy-11/EIF`](https://github.com/chemmy-11/EIF) 里的坑账本与规范文件
+> （本仓库不复制它们，只引用编号）。所有绝对路径都是**示例**，权威值永远来自 `config.yml` + `doctor.ps1`。
+
 ## 1. 上游身份（可复核，不是猜的）
 
 | 项 | 值 | 证据（文件:行 / 命令） |
 |---|---|---|
-| 包名 / 版本 | `vivado-mcp` **0.3.26** | `D:\vivado-mcp\site\vivado_mcp-0.3.26.dist-info\METADATA:2-3`（`Name: vivado-mcp` / `Version: 0.3.26`） |
+| 包名 / 版本 | `vivado-mcp` **0.3.26** | `<vivado-mcp>\site\vivado_mcp-0.3.26.dist-info\METADATA:2-3`（`Name: vivado-mcp` / `Version: 0.3.26`） |
 | 许可证 | **Apache-2.0**（`License-Expression: Apache-2.0`，附 `License-File: LICENSE`） | 同文件 `:10`、`:11`；许可证正文 `vivado_mcp-0.3.26.dist-info\licenses\LICENSE`（10 774 B，Apache 2.0 全文） |
 | 上游仓库 | <https://github.com/mapleleavessssss-wq/vivado-mcp> | 同文件 `Project-URL: Homepage/Repository/Issues/Changelog`（`:5-8`） |
 | 作者 | `Author: NJ` | 同文件 `:9` |
 | Python 要求 | **≥3.10**（`Requires-Python: >=3.10`） | 同文件 `:23` |
-| 安装形态（本机） | `pip install --target D:\vivado-mcp\site`，安装器 `pip` | `vivado_mcp-0.3.26.dist-info\INSTALLER` 内容 = `pip`；`REQUESTED` 存在 |
-| 安装位置红线 | 必须纯 ASCII（`D:\vivado-mcp`）；中文路径会让 `start_session` 必失败 | `D:\FPGA\PITFALLS.md:31`（坑 #21） |
+| 安装形态（本机） | `pip install --target <vivado-mcp>\site`，安装器 `pip` | `vivado_mcp-0.3.26.dist-info\INSTALLER` 内容 = `pip`；`REQUESTED` 存在 |
+| 安装位置红线 | 必须纯 ASCII（`<vivado-mcp>`）；中文路径会让 `start_session` 必失败 | `PITFALLS.md:31`（坑 #21） |
 
 > 版本号的直接探针（不用启动 MCP）：
 >
 > ```powershell
 > py -c "import importlib.metadata as m; print(m.version('vivado-mcp'))"   # → 0.3.26（PYTHONPATH 指向 site 时）
-> py D:\vivado-mcp\mcp_ctl.py list | wc -l                                 # → 32（工具数，见 §5.1）
+> py <vivado-mcp>\mcp_ctl.py list | wc -l                                 # → 32（工具数，见 §5.1）
 > ```
 
 ## 2. 补丁基线是怎么证明的（关键：别拿错 `.bak`）
 
-`D:\vivado-mcp\site` 里有三种 `.bak-mcp-*` 文件，**含义不同、只有一种能当基线**：
+`<vivado-mcp>\site` 里有三种 `.bak-mcp-*` 文件，**含义不同、只有一种能当基线**：
 
 | 文件名 | 真实含义 | 能否当补丁基线 |
 |---|---|---|
@@ -40,7 +44,7 @@
 
 ```powershell
 # 全站对账：只有 4 个文件与 RECORD 不一致 ⇒ 本目录 4 个补丁就是本机全部本地改动
-py -c "import base64,hashlib,os;root=r'D:/vivado-mcp/site';mod=[];[mod.append(p.split(',')[0]) for p in open(os.path.join(root,'vivado_mcp-0.3.26.dist-info/RECORD'),encoding='utf-8') if p.split(',')[1].startswith('sha256=') and os.path.isfile(os.path.join(root,p.split(',')[0])) and base64.urlsafe_b64encode(hashlib.sha256(open(os.path.join(root,p.split(',')[0]),'rb').read()).digest()).decode().rstrip('=')!=p.split(',')[1][7:]];print(len(mod),mod)"
+py -c "import base64,hashlib,os;root=r'<vivado-mcp>/site';mod=[];[mod.append(p.split(',')[0]) for p in open(os.path.join(root,'vivado_mcp-0.3.26.dist-info/RECORD'),encoding='utf-8') if p.split(',')[1].startswith('sha256=') and os.path.isfile(os.path.join(root,p.split(',')[0])) and base64.urlsafe_b64encode(hashlib.sha256(open(os.path.join(root,p.split(',')[0]),'rb').read()).digest()).decode().rstrip('=')!=p.split(',')[1][7:]];print(len(mod),mod)"
 # 实测输出： 4 ['vivado_mcp/analysis/xdc_linter.py', 'vivado_mcp/tools/cdc_tools.py', 'vivado_mcp/tools/diagnostic_tools.py', 'vivado_mcp/tools/tcl_tools.py']
 
 # 四个 `.bak` 基线的 sha256 与 RECORD 相等（实测 4/4 PRISTINE-MATCH）
@@ -61,18 +65,18 @@ py -c "import base64,hashlib,os;root=r'D:/vivado-mcp/site';mod=[];[mod.append(p.
 
 两件事，落在同一个文件同一轮里，但各自独立、可分别回退：
 
-1. **`max_lines` / `save_full_to` 输出裁剪（默认 0 = 不裁剪）** —— 修 `D:\FPGA\PITFALLS.md:84`（坑 #74：`run_tcl` 原始 stdout 一次可烧 ~8k tokens）。
+1. **`max_lines` / `save_full_to` 输出裁剪（默认 0 = 不裁剪）** —— 修 `PITFALLS.md:84`（坑 #74：`run_tcl` 原始 stdout 一次可烧 ~8k tokens）。
    - 新增纯函数 `truncate_output()`（`tcl_tools.py:65`）、`_count_key_lines()`（`:40`）、`_save_full_text()`（`:49`）与统一后处理 `_render_result()`（`:152`）。
    - `run_tcl`（`:197` 起）与 `safe_tcl`（`:350` 起）各加 `max_lines: int = 0`、`save_full_to: str = ""`；**默认不裁剪 ⇒ 默认行为逐字节不变**（`_render_result` 在 `max_lines<=0 且 save_full_to 为空` 时直接走原 `_safe_execute` 路径）。
    - 裁剪时红线段 `CRITICAL_LINE_RE = ^\s*(?:ERROR|CRITICAL WARNING|警告)`（`:34`）保证关键行即使落在窗口外也不丢（坑 #69 的延伸：裁剪不许吞错误）。
-2. **`safe_tcl` 占位符陷阱提示** —— 修 `D:\FPGA\PITFALLS.md:85`（坑 #75：`tcl_quote` 把参数包成 `"..."`，模板 `puts X={0}` 会被 Tcl 拆成两个词）。
+2. **`safe_tcl` 占位符陷阱提示** —— 修 `PITFALLS.md:85`（坑 #75：`tcl_quote` 把参数包成 `"..."`，模板 `puts X={0}` 会被 Tcl 拆成两个词）。
    - `_QUOTE_TRAP_MARKERS = ("close-quote", "can not find channel named")`、`_QUOTE_TRAP_HINT`（`:133`）、`_maybe_append_quote_hint()`（`:139`）：只在**执行确实失败**且命中特征时追加一行中文提示「占位符必须独占一个 Tcl 词」，不改变正常输出。
 
 ### 3.2 `0002-xdc-lint-aggregate-and-default-full.patch`（`xdc_linter.py`）
 
-- **按规则聚合的摘要段**：新增 `_SEVERITY_ORDER`（`:328`）、`_rule_breakdown()`（`:345`，端口族归一 `c0_ddr4_dq[31] → c0_ddr4_dq`）。GT/DDR4 这类几百个引脚一次触发大量 `MISSING_IOSTANDARD` 时，先给端口族分布，避免被明细淹没（`D:\FPGA\PITFALLS.md:30` 坑 #20 的误报语境）。
+- **按规则聚合的摘要段**：新增 `_SEVERITY_ORDER`（`:328`）、`_rule_breakdown()`（`:345`，端口族归一 `c0_ddr4_dq[31] → c0_ddr4_dq`）。GT/DDR4 这类几百个引脚一次触发大量 `MISSING_IOSTANDARD` 时，先给端口族分布，避免被明细淹没（`PITFALLS.md:30` 坑 #20 的误报语境）。
 - **`severity=` 过滤 + `max_items`**：`format_lint_report(report, severity="all", max_items=0)`（`:382`）；摘要段**永远全量**，过滤只影响明细。
-- **默认值改为无损**：`max_items` 由 `20` → **`0`（默认全量）**，修 `D:\FPGA\PITFALLS.md:86`（坑 #76：默认截断会静默吞掉真要修的那几条；官方 273 引脚 `KU_IO.xdc` 反例）。
+- **默认值改为无损**：`max_items` 由 `20` → **`0`（默认全量）**，修 `PITFALLS.md:86`（坑 #76：默认截断会静默吞掉真要修的那几条；官方 273 引脚 `KU_IO.xdc` 反例）。
 
 ### 3.3 `0003-xdc-lint-tool-default-full.patch`（`diagnostic_tools.py`）
 
@@ -81,7 +85,7 @@ py -c "import base64,hashlib,os;root=r'D:/vivado-mcp/site';mod=[];[mod.append(p.
 
 ### 3.4 `0004-get-cdc-report-default-full.patch`（`cdc_tools.py`）
 
-- `get_cdc_report(..., max_details: int = 0)`（`:23`）：由 `100` → **`0` = 全量**（工具自身界仍是 0..500），并在 docstring 写明理由（`:32-34`），修 `D:\FPGA\PITFALLS.md:86`（坑 #76 同族：CDC 违例同样是逐条可修的细节）。
+- `get_cdc_report(..., max_details: int = 0)`（`:23`）：由 `100` → **`0` = 全量**（工具自身界仍是 0..500），并在 docstring 写明理由（`:32-34`），修 `PITFALLS.md:86`（坑 #76 同族：CDC 违例同样是逐条可修的细节）。
 - 现场路径仍是 `report_cdc -details -return_string`（`:53`）——**这一条在 2023.1 上尚未实测**（`结论_cross_Vivado环境DSH规范化_2026-10-24.md` §5 第 4 项把 `get_cdc_report` 列为未触达工具），见 `..\..\docs\version-matrix.md`。
 
 ## 3.5 许可合规（Apache-2.0，第一次用请读这 20 行）
@@ -107,7 +111,7 @@ py -c "import base64,hashlib,os;root=r'D:/vivado-mcp/site';mod=[];[mod.append(p.
 
 ```powershell
 # <kit> = 你解压 dsh-vivado 的目录（本机是 D:\dsh-vivado）
-cd D:\vivado-mcp\site
+cd <vivado-mcp>\site
 # 一次性全打（顺序无关：4 个补丁改 4 个不同文件）
 git -c core.autocrlf=false apply -p1 <kit>\patches\vivado-mcp\0001-tcl-max-lines-and-safe-tcl-hint.patch
 git -c core.autocrlf=false apply -p1 <kit>\patches\vivado-mcp\0002-xdc-lint-aggregate-and-default-full.patch
@@ -124,17 +128,17 @@ git -c core.autocrlf=false apply -p1 <kit>\patches\vivado-mcp\0004-get-cdc-repor
 ### 5.1 安装存在性（版本 + 工具面）
 
 ```powershell
-py D:\vivado-mcp\mcp_ctl.py list
+py <vivado-mcp>\mcp_ctl.py list
 ```
 
 - 期望：**32 行**工具、每行 `工具名<TAB>中文说明`（实测 `wc -l` = 32；首行 `check_bitstream_readiness`，末行 `xdc_lint`）。
-- 少于 32：装的是别的版本或 `PYTHONPATH` 指错（`mcp_ctl.py` 走 `D:\vivado-mcp\site`）；不是补丁问题，别先怀疑补丁。
+- 少于 32：装的是别的版本或 `PYTHONPATH` 指错（`mcp_ctl.py` 走 `<vivado-mcp>\site`）；不是补丁问题，别先怀疑补丁。
 - 版本核对：`METADATA` 里 `Version: 0.3.26`；本目录补丁**只对 0.3.26 的行文成立**。
 
 ### 5.2 补丁是否就位（最可靠：反向试打）
 
 ```powershell
-cd D:\vivado-mcp\site
+cd <vivado-mcp>\site
 foreach ($p in (Get-ChildItem <kit>\patches\vivado-mcp\*.patch)) {
   git -c core.autocrlf=false apply -R --check -p1 $p.FullName
   if ($LASTEXITCODE -eq 0) { "APPLIED  $($p.Name)" } else { "MISSING  $($p.Name)" }
@@ -147,7 +151,7 @@ foreach ($p in (Get-ChildItem <kit>\patches\vivado-mcp\*.patch)) {
 ### 5.3 签名行（不想碰 git 时的快速 grep，PowerShell 原生写法，已实测）
 
 ```powershell
-cd D:\vivado-mcp\site
+cd <vivado-mcp>\site
 Select-String -SimpleMatch '_QUOTE_TRAP_HINT'      -Path vivado_mcp\tools\tcl_tools.py        # 0001
 Select-String -SimpleMatch 'max_items: int = 0'    -Path vivado_mcp\analysis\xdc_linter.py     # 0002
 Select-String -SimpleMatch 'max_items: int = 0'    -Path vivado_mcp\tools\diagnostic_tools.py  # 0003
@@ -173,7 +177,7 @@ Select-String -SimpleMatch 'max_details: int = 0'  -Path vivado_mcp\tools\cdc_to
 
 ## 6. 上游政策：PR 优先，不做私有分支
 
-- **不做私有 fork**：`D:\vivado-mcp\site` 不是我们的仓库，我们**不重分发修改后的源码**，只随包给 `.patch`；本 kit 也不包含 `vivado-mcp` 本体（同门用 `pip install vivado-mcp==0.3.26` 自装）。
+- **不做私有 fork**：`<vivado-mcp>\site` 不是我们的仓库，我们**不重分发修改后的源码**，只随包给 `.patch`；本 kit 也不包含 `vivado-mcp` 本体（同门用 `pip install vivado-mcp==0.3.26` 自装）。
 - **优先上游 PR**：按 Apache-2.0 §4(b)，被修改的文件必须带「已修改」提示；把改动留在我们自己的 patch 里、由使用者显式应用，比静默发一份改过的源码更符合该义务（也让上游可审）。`0001`–`0004` 每条都能独立成 PR；`docs/version-matrix.md` 与 `skills/` 里引用了坑号，PR 描述可直接抄 §3。
 - 上游若接受（或自己改了同名默认值），本目录对应补丁应删除并在 `NOTICE` §2 记录「已上游化」。
 
@@ -181,8 +185,8 @@ Select-String -SimpleMatch 'max_details: int = 0'  -Path vivado_mcp\tools\cdc_to
 
 ```powershell
 # 1) 新环境先装到纯 ASCII 目录并留 pristine 副本
-py -m pip install --target D:\vivado-mcp\site vivado-mcp==<新版本>
-cd D:\vivado-mcp\site
+py -m pip install --target <vivado-mcp>\site vivado-mcp==<新版本>
+cd <vivado-mcp>\site
 #    用 dist-info\RECORD 的 sha256 逐个核对哪些文件被本 kit 改过（见 §2 命令）
 # 2) 新版本上重放旧补丁：能干净应用 → 直接沿用；冲突 → 按 §3 的语义重新实现
 git -c core.autocrlf=false apply --check -p1 <旧补丁>
@@ -209,7 +213,7 @@ PRISTINE-MATCH vivado_mcp/tools/diagnostic_tools.py.bak-mcp-20261024
 PRISTINE-MATCH vivado_mcp/tools/tcl_tools.py.bak-mcp-20261024
 PRISTINE-MATCH vivado_mcp/tools/cdc_tools.py.bak-mcp-20261024b
 
-# 应用测试（scratch 树 D:\FPGA\.tmp\kit-recon-2026-10-24\applytest\site，文件由上面 4 个 pristine 副本重建）
+# 应用测试（scratch 树 <project_root>\.tmp\kit-recon-2026-10-24\applytest\site，文件由上面 4 个 pristine 副本重建）
 0001-tcl-max-lines-and-safe-tcl-hint.patch           APPLIES CLEANLY
 0002-xdc-lint-aggregate-and-default-full.patch       APPLIES CLEANLY
 0003-xdc-lint-tool-default-full.patch                APPLIES CLEANLY

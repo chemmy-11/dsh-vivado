@@ -1,8 +1,7 @@
 ---
 name: vivado-workflow-discipline
 description: "Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail、safe_tcl 占位符必须独占一个词、检查类工具默认无损不得静默截断、版本分档（2023.1 有本仓记录 / 2025.2+ 必须重探）等判据。当任务要打开或运行 Vivado 工程、综合、实现、时序/CDC 分析、XDC 约束检查、ILA 调试，或需要判断「工具说成功是不是真的成功」时使用。"
-# 本技能由本 kit 作者撰写，不属第三方：授权条款见仓库顶层 LICENSE（不在此处单独声明）。
-license: NOASSERTION
+license: MIT
 metadata:
   version: "1.0.0"
 baseline:

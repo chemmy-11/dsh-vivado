@@ -9,7 +9,7 @@
 
 | 项 | 值 |
 |---|---|
-| 上游容器 | `vivado-ai-extension-2026.9.1.vsix`（本机副本：`C:\Users\15266\Downloads\vivado-ai-extension-2026.9.1.vsix`）`实测` |
+| 上游容器 | `vivado-ai-extension-2026.9.1.vsix`（本机副本：`<vsix 所在目录>\vivado-ai-extension-2026.9.1.vsix`）`实测` |
 | 容器内路径 | `extension/resources/plugin-bundled/skills/<name>/` `实测` |
 | 上游仓库 | <https://github.com/Xilinx/ross-ai-assistant>（同源说法来自 `<vault>/.ross-recon/安装记录.md:5`；本机未联网核对仓库内容 ⇒ `按文档`） |
 | 许可 | **MIT** —— 见下方两条证据 |
@@ -54,7 +54,7 @@
 
 ### 1.3 已知的「不通用」内容（诚实声明，未擅自清洗）
 
-`本机适配注记` 里含**作者机器**的绝对路径与本地事实（`D:\vivado-mcp`、`C:\Users\<作者>\AppData\Local\Python\...`、`D:\FPGA\docs`、Python 3.14 等）。
+`本机适配注记` 原含**作者机器**的绝对路径与本地事实；**公开版（2026-10-24）已脱敏**为配置驱动占位符（`<python 解释器：见 config.yml 的 python>`、`<vivado-mcp>`、`<project_root>`、`<本技能目录>\doc_search.py`、`<vsix 所在目录>`），技术内容未删。改动文件仍在本节列的 7 个之内。
 按任务书「AMD 技能逐字节复制、不改内容」的要求，本轮**保留原样**：
 
 - 对本 kit 的使用者，权威配置是 `config.yml`（`part` / `project_root` / `vivado_version` / `vivado_path` / `temp_dir` / `python`）+ `doctor.ps1`；注记里的路径只作历史参考。
@@ -94,7 +94,7 @@
 
 ```powershell
 # 1) vsix 里的许可与技能清单
-py -c "import zipfile;z=zipfile.ZipFile(r'C:\Users\15266\Downloads\vivado-ai-extension-2026.9.1.vsix');print(z.read('extension/resources/plugin-bundled/LICENSE').decode()[:80])"
+py -c "import zipfile;z=zipfile.ZipFile(r'<vsix 所在目录>\vivado-ai-extension-2026.9.1.vsix');print(z.read('extension/resources/plugin-bundled/LICENSE').decode()[:80])"
 
 # 2) dist\skills 与安装副本逐字节一致（同时是「复制没走样」的证明）
 py <vault>\.vivado-scratch\kit-2026-10-24\ps-skills\sync_skills.py

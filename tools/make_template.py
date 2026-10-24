@@ -141,18 +141,20 @@ def build(src: Path) -> dict[str, str]:
     while mcp_block and mcp_block[-1].strip() == "":
         mcp_block.pop()
     mcp = "\n".join(mcp_block) + "\n"
-    subs = {
-        r"command: 'D:\vivado-mcp\venv\Scripts\python.exe'": "command: '{{MCP_PYTHON}}'",
-        r"PYTHONPATH: 'D:\vivado-mcp\site'": "PYTHONPATH: '{{MCP_SITE}}'",
-        r"VIVADO_PATH: 'D:/Xilinx/Vivado/2023.1/bin/vivado.bat'": "VIVADO_PATH: '{{VIVADO_BAT}}'",
-        r"cwd: 'D:\FPGA'": "cwd: '{{MCP_CWD}}'",
-        r"TEMP: 'D:\FPGA\.tmp'": "TEMP: '{{TEMP_DIR}}'",
-        r"TMP: 'D:\FPGA\.tmp'": "TMP: '{{TEMP_DIR}}'",
-    }
-    for old, new in subs.items():
-        if old not in mcp:
-            raise SystemExit(f"[ERROR] mcp 行里找不到待参数化片段: {old}")
-        mcp = mcp.replace(old, new)
+    # 机器相关值按**模式**参数化，而不是按作者本机的字面值：这样任何人的 bundle patch
+    # （同一套 shipped 行、只是路径不同）都能被本工具重新抽取成模板。
+    subs = [
+        (r"(?m)^(\s+command: )'[^'\n]*'", r"\1'{{MCP_PYTHON}}'"),
+        (r"(?m)^(\s+PYTHONPATH: )'[^'\n]*'", r"\1'{{MCP_SITE}}'"),
+        (r"(?m)^(\s+VIVADO_PATH: )'[^'\n]*'", r"\1'{{VIVADO_BAT}}'"),
+        (r"(?m)^(\s+cwd: )'[^'\n]*'", r"\1'{{MCP_CWD}}'"),
+        (r"(?m)^(\s+TEMP: )'[^'\n]*'", r"\1'{{TEMP_DIR}}'"),
+        (r"(?m)^(\s+TMP: )'[^'\n]*'", r"\1'{{TEMP_DIR}}'"),
+    ]
+    for pattern, repl in subs:
+        mcp, n = re.subn(pattern, repl, mcp)
+        if n != 1:
+            raise SystemExit(f"[ERROR] mcp 行里 {pattern!r} 命中 {n} 次（应为 1）")
     # 注释里的机器事实改成 kit 中立表述（保留「为什么」，去掉「哪台机」）
     mcp = re.sub(
         r"                # 4\) TEMP/TMP.*?\n(?=                TEMP:)",

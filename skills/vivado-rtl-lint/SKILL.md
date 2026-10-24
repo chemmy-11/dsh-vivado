@@ -15,11 +15,11 @@ baseline:
 
 > **本机适配注记（非 AMD 原文；2026-10-18 由 DSH 会话追加）**
 >
-> - 工具链不同：本机用**第三方 vivado-mcp**（现役安装 `D:\vivado-mcp`，32 个工具），不是官方 `vivado-mcp-server`；仓库内 `D:\FPGA\vivado-mcp` 是零改动随仓副本、**不是运行实例**（客户端必须显式设 `PYTHONPATH=D:\vivado-mcp\site`，否则 venv 的 `_mcp_pilot_paths.pth` 会命中 `.mcp-pilot` 中文路径副本 → `start_session` 静默失败）。
+> - 工具链不同：本机用**第三方 vivado-mcp**（现役安装 `<vivado-mcp>`，32 个工具），不是官方 `vivado-mcp-server`；仓库内 `<EIF 仓库>\vivado-mcp` 是零改动随仓副本、**不是运行实例**（客户端必须显式设 `PYTHONPATH=<vivado-mcp>\site`，否则 venv 的 `_mcp_pilot_paths.pth` 会命中 `.mcp-pilot` 中文路径副本 → `start_session` 静默失败）。
 > - 工具映射：`vivadoExecute`/`vivado_execute`→`run_tcl`/`safe_tcl`；`vivado_start`→`start_session`；`vivado_stop`→`stop_session`；`vivado_list_sessions`→`list_sessions`；`vivado_status`→`get_run_progress`；`vivado_log_messages`→`get_critical_warnings`（仅 runme.log）或 `read`/`grep`；`read_file`→`read`；`create_file`→`write`；`replace_string_in_file`→`edit`；`file_search`→`glob`；`grep_search`→`grep`；`run_in_terminal`→`pwsh`；`runSubagent`→`subagent`。
-> - 会话没挂 MCP 工具时走 CLI 桥：`python D:\vivado-mcp\mcp_ctl.py session "<多行 Tcl>"`（等价 run_tcl）、`call <tool> --args-file <json>`、`list`。**一次调用一个 MCP 进程**，多步会话必须写成单次 `session`。（2026-10-24 已在 desktop profile 配置 `mcp__vivado__*`，需重启宿主生效；未生效时 CLI 桥仍是唯一通路。）
-> - 版本事实：Vivado **2023.1**（官方基线 2026.1）；Python 用 `C:\Users\15266\AppData\Local\Python\pythoncore-3.14-64\python.exe`。
-> - 文档检索：本机无 `vivado_doc_search`，改用 `web_fetch`（docs.amd.com / 官方 docs）或本项目 `D:\FPGA\docs`。
+> - 会话没挂 MCP 工具时走 CLI 桥：`python <vivado-mcp>\mcp_ctl.py session "<多行 Tcl>"`（等价 run_tcl）、`call <tool> --args-file <json>`、`list`。**一次调用一个 MCP 进程**，多步会话必须写成单次 `session`。（2026-10-24 已在 desktop profile 配置 `mcp__vivado__*`，需重启宿主生效；未生效时 CLI 桥仍是唯一通路。）
+> - 版本事实：Vivado **2023.1**（官方基线 2026.1）；Python 用 `<python 解释器：见 config.yml 的 python（install.ps1 写入实际值）>`。
+> - 文档检索：本机无 `vivado_doc_search`，改用 `web_fetch`（docs.amd.com / 官方 docs）或本项目 `<project_root>\docs`。
 > - 硬约束：MCP 安装路径必须纯 ASCII（中文路径经 Vivado Tcl GBK 解码会坏）；Vivado 会话与综合/实现/仿真全局串行。
 
 <!--
