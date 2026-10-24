@@ -200,7 +200,7 @@ Remove-Item -Recurse -Force $env:USERPROFILE\.dsh\bundles\dsh-vivado
 | AMD 官方 6 件技能（`skills/` 里那 6 个目录） | **MIT**（© 2026 AMD） | 保留版权+许可声明、标明我们的改动 | `NOTICE` §1 + 附录 A；`docs/licensing.md` §1 |
 | 取自 DeepSeek Harness 的 22 条预设插件行 | **MIT**（© 2026 DeepSeek） | 保留版权+许可声明 | `NOTICE` §3.1 + 附录 C；`docs/licensing.md` §2 |
 | vivado-mcp 的 4 个补丁 | 改的是 **Apache-2.0** 代码 | 随附许可证全文、标明「已修改」 | `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`、README §3.5 |
-| 本仓库自己的代码/文档 | **MIT**（© 2026 chemmy-11） | 保留版权+许可声明 | `LICENSE`（MIT 正文 + 「适用范围」carve-out 表） |
+| 本仓库自己的代码/文档 | **MIT**（© 2026 chemmy-11） | 保留版权+许可声明 | `LICENSE`（纯 MIT 文本）；「MIT 只覆盖自有内容」的 carve-out 表在 `NOTICE` §3.0 |
 
 - **不随包分发**：Vivado 本体与许可证、AMD entitlement、任何密钥、`vivado-mcp` 源码、DSH 运行时/CLI/UI 代码。
 - 与 AMD / Xilinx / DeepSeek **无隶属或背书关系**；名称仅为指称（`NOTICE` §3.2）。

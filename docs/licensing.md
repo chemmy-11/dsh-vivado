@@ -113,9 +113,10 @@
 
 ## 4. 我们自己的内容
 
-`LICENSE` 的定位：**MIT**（`Copyright (c) 2026 chemmy-11`），2026-10-24 随仓库公开一并切换。
-`LICENSE` 的「适用范围」一节明确：MIT **只覆盖我们原创的那部分**；§1（AMD MIT）、§2（vivado-mcp Apache-2.0）、
-§3.1（DeepSeek MIT）的第三方内容保留各自条款，本文件不为它们重新授权、也不改变它们。
+`LICENSE` 的定位：**纯 MIT 文本**（`Copyright (c) 2026 chemmy-11`），2026-10-24 随仓库公开一并切换——
+保持纯文本是为了让 GitHub / 工具链能识别为 MIT。
+「MIT 只覆盖我们原创的那部分」这条 carve-out 写在 `NOTICE` §3.0（含 AMD MIT / DeepSeek MIT / vivado-mcp Apache-2.0 的逐项映射），
+两处不冲突：MIT 的义务照做，第三方条款按各自原文执行。
 这与本文件 §0 的合规结论一致：三方许可互不冲突，MIT 内容的再分发不需要额外许可。
 
 ### 公开版发布（2026-10-24 已执行 / 剩余项）

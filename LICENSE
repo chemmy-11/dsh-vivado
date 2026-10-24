@@ -19,26 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-# 适用范围（重要：MIT 只覆盖我们原创的那部分）
-
-上面这段 MIT 授权覆盖**本仓库中由维护者原创的内容**：`package.json`、`install.ps1`、
-`uninstall.ps1`、`doctor.ps1`、`lib/**`、`tools/**`、`templates/**`、`docs/**`、
-`skills/amd-doc-search/**`、`skills/vivado-workflow-discipline/**`、
-`patches/vivado-mcp/README.md` 与 `patches/vivado-mcp/0001..0004*.patch`（补丁文本与说明）、
-以及 `README.md` / `NOTICE` / 本文件。
-
-**它不覆盖、也不改变**下列第三方内容的许可 —— 它们各有各的条款，本文件不为它们重新授权：
-
-| 内容 | 许可 | 条款与证据 |
-|---|---|---|
-| `skills/{hw-ila-debug,hw-vio-debug,vivado-revision-control,vivado-rtl-elaboration-analysis,vivado-rtl-lint,vivado-simulate-rtl}/**`（AMD 官方技能） | **MIT**，© 2026 Advanced Micro Devices, Inc. | 全文见 `NOTICE` 附录 A；来源与我们的改动见 `NOTICE` §1 |
-| 取自 DeepSeek Harness 的 **22 条 shipped 插件行**（`templates/preset.patch.yml.tmpl` 与审计件） | **MIT**，© 2026 DeepSeek | 全文见 `NOTICE` 附录 C；证据见 `NOTICE` §3.1 |
-| `patches/vivado-mcp/*.patch` **所修改的上游代码**（`vivado-mcp` 0.3.26，第三方，本仓库不含其源码） | **Apache-2.0** | 全文见 `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`；义务见 `NOTICE` §2.1 |
-
-**本仓库不包含**：Vivado 本体与许可证、AMD entitlement、任何密钥/token、`vivado-mcp` 源码、DSH 运行时或界面代码。
-
-商标：`AMD` / `Xilinx` / `Vivado` / `DeepSeek Harness` 等名称仅用于指称对应产品或服务，
-商标权归各自权利人；本项目与它们无隶属、赞助或背书关系（`NOTICE` §3.2）。

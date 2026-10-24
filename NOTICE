@@ -100,6 +100,25 @@
 上面 §1（AMD 技能，MIT © AMD）、§2（vivado-mcp 补丁所改的上游代码，Apache-2.0）、§3.1（22 行 shipped 插件行，MIT © DeepSeek）
 各自保留自己的许可，`LICENSE` 的「适用范围」一节逐项列明。
 
+### 3.0 授权范围（`LICENSE` = MIT，但只管我们原创的部分）
+
+`LICENSE` 是标准 MIT 文本（`Copyright (c) 2026 chemmy-11`），覆盖**本仓库中由维护者原创的内容**：
+`package.json`、`install.ps1`、`uninstall.ps1`、`doctor.ps1`、`lib/**`、`tools/**`、`templates/**`、`docs/**`、
+`skills/amd-doc-search/**`、`skills/vivado-workflow-discipline/**`、`patches/vivado-mcp/README.md` 与
+`patches/vivado-mcp/0001..0004*.patch`（补丁文本与说明）、`README.md` / `NOTICE` / `LICENSE`。
+
+它**不覆盖、也不改变**下列第三方内容（各自保留自己的许可，本仓库不为它们重新授权）：
+
+| 内容 | 许可 | 条款与证据 |
+|---|---|---|
+| `skills/{hw-ila-debug,hw-vio-debug,vivado-revision-control,vivado-rtl-elaboration-analysis,vivado-rtl-lint,vivado-simulate-rtl}/**`（AMD 官方技能） | **MIT**，© 2026 Advanced Micro Devices, Inc. | 附录 A；来源与改动见 §1 |
+| 取自 DeepSeek Harness 的 **22 条 shipped 插件行** | **MIT**，© 2026 DeepSeek | 附录 C；证据见 §3.1 |
+| `patches/vivado-mcp/*.patch` **所修改的上游代码**（`vivado-mcp` 0.3.26，本仓库不含其源码） | **Apache-2.0** | `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`；义务见 §2.1 |
+
+> 为什么要单列这张表：`LICENSE` 保持**纯 MIT 文本**（这样 GitHub 能识别为 MIT、工具链也认），
+> 而「MIT 只覆盖自有内容」这件事写在本 NOTICE 里——两处不冲突：MIT 的义务我们照做（附本文件+`LICENSE`），
+> 第三方条款按第三方原文执行。
+
 | 路径 | 内容 | 是否含第三方内容 |
 |---|---|---|
 | `package.json` / `cordis.patch.yml`（渲染产物）/ `config.example.yml` | bundle 清单、会话预设 patch、环境配置样例 | **是，见 §3.1**（22 行 shipped 插件清单取自 DSH 安装包） |
