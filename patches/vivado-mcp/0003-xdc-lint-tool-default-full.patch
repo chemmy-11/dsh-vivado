@@ -1,0 +1,50 @@
+--- a/vivado_mcp/tools/diagnostic_tools.py
++++ b/vivado_mcp/tools/diagnostic_tools.py
+@@ -642,6 +642,8 @@
+ @mcp.tool()
+ async def xdc_lint(
+     xdc_paths: list[str] | None = None,
++    severity: str = "all",
++    max_items: int = 0,
+     session_id: str = "default",
+     ctx: Context = None,
+ ) -> str:
+@@ -654,11 +656,29 @@
+     - CLOCK_NO_PERIOD:create_clock 缺 -period
+     - PIN_CONFLICT_CROSS_FILE:多个 XDC 文件间的引脚冲突
+ 
++    **输出分三段**:按规则聚合的摘要(全量,不受 max_items 影响)→ 明细 → 若显式
++    传了 max_items 则截断并明写「还有 N 条未显示」。
++
++    **默认全量(``max_items=0``)**:检查类工具的首要职责是让调用方拿到完整工程细节,
++    省上下文只能靠调用方**显式**选择,不能由默认值替它决定「哪些条目不必看」。
++    实测反例:官方 273 引脚 `KU_IO.xdc` 报 1 条 PIN_CONFLICT + 17 条 DUPLICATE_PORT,
++    每条都带行号且都必须逐条修 —— 若默认截断到 20,条目一多就会静默吞掉真要修的那几条。
++    嫌长时:先看聚合段定位端口族,再按需 ``severity=error`` 或把 ``max_items`` 调小。
++
+     Args:
+         xdc_paths: 要检查的 XDC 文件路径列表。若不传,则从当前 session 的项目里
+             自动抓取所有 constrs_1 下的 XDC 文件。
++        severity: 只看某个级别,``all``(默认)/ ``error`` / ``warning``。
++            注意表头计数永远是全量的,过滤只影响明细。
++        max_items: 明细分条上限。``0``(默认)= 不限、全量输出;传正数才截断,
++            截断时会明写还剩多少条。
+         session_id: 目标会话 ID(仅在不传 xdc_paths 时使用)。
+     """
++    if severity not in ("all", "error", "warning"):
++        return (
++            f"[ERROR] 未知 severity '{severity}'，应为 all / error / warning"
++        )
++
+     # 路径来源:显式传入 > 从 session 拉取
+     if xdc_paths is None or len(xdc_paths) == 0:
+         session = _require_session(ctx, session_id)
+@@ -675,7 +695,7 @@
+         return "项目未添加任何 XDC 约束文件,没什么可检查的。"
+ 
+     report = lint_xdc_files(list(xdc_paths))
+-    return format_lint_report(report)
++    return format_lint_report(report, severity=severity, max_items=max_items)
+ 
+ 
+ @mcp.tool()

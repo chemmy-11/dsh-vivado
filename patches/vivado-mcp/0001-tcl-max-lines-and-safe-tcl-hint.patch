@@ -1,0 +1,261 @@
+--- a/vivado_mcp/tools/tcl_tools.py
++++ b/vivado_mcp/tools/tcl_tools.py
+@@ -7,19 +7,195 @@
+ - ``run_tcl`` — 执行任意 Tcl 命令（AI 自己负责引号 / 路径 / 标识符安全性）
+ - ``safe_tcl`` — 带参数模板的版本，自动用 Tcl ``list`` 规则转义参数，
+   Windows 路径含空格 / 中文 / ``$`` / ``[]`` / ``{}`` / 反斜杠也能安全执行
++
++两者都支持 ``max_lines`` / ``save_full_to`` 做输出裁剪（0 = 不限，默认不裁剪，
++向后兼容）：Vivado 的原始 stdout 很容易一次几千 tokens，裁剪只保留末 N 行，
++但 ``ERROR`` / ``CRITICAL WARNING`` / ``警告`` 行无论落在窗口内外都不会丢
++（坑 #69：只看传输层 isError 会把失败当成功，裁剪更不能吞错误）。
+ """
+ 
++from __future__ import annotations
++
++import asyncio
++import os
++import re
++
+ from mcp.server.mcpserver import Context
+ 
+ from vivado_mcp.server import _NO_SESSION, _require_session, _safe_execute, mcp
+ from vivado_mcp.vivado.tcl_utils import tcl_quote
+ 
++# --------------------------------------------------------------------------- #
++#  输出裁剪（纯函数，便于单元测试）
++# --------------------------------------------------------------------------- #
++
++# 关键行：无论裁剪窗口落在哪里都必须出现在返回文本里。
++# 这是本模块的红线——裁剪吞掉 ERROR 就等于把失败伪装成成功（坑 #69）。
++CRITICAL_LINE_RE = re.compile(r"^\s*(?:ERROR|CRITICAL WARNING|警告)")
++_ERROR_LINE_RE = re.compile(r"^\s*ERROR")
++_CRITICAL_WARNING_LINE_RE = re.compile(r"^\s*CRITICAL WARNING")
++_WARNING_CN_LINE_RE = re.compile(r"^\s*警告")
++
++
++def _count_key_lines(lines: list[str]) -> tuple[int, int, int]:
++    """统计全文的 ERROR / CRITICAL WARNING / 警告 行数（摘要行用）。"""
++    return (
++        sum(1 for ln in lines if _ERROR_LINE_RE.match(ln)),
++        sum(1 for ln in lines if _CRITICAL_WARNING_LINE_RE.match(ln)),
++        sum(1 for ln in lines if _WARNING_CN_LINE_RE.match(ln)),
++    )
++
++
++def _save_full_text(text: str, save_full_to: str) -> str:
++    """把完整文本按 UTF-8 写盘，返回一行提示；写失败也只返回提示，不抛。"""
++    try:
++        parent = os.path.dirname(os.path.abspath(save_full_to))
++        if parent:
++            os.makedirs(parent, exist_ok=True)
++        with open(save_full_to, "w", encoding="utf-8", newline="") as f:
++            f.write(text)
++    except OSError as e:
++        return f"[保存失败] 无法写入 {save_full_to}: {e}"
++    return (
++        f"[全文已保存] {save_full_to}"
++        f"（{len(text.splitlines())} 行 / {len(text)} 字符，UTF-8）"
++    )
++
++
++def truncate_output(
++    text: str,
++    max_lines: int = 0,
++    save_full_to: str = "",
++    notes: tuple[str, ...] = (),
++) -> str:
++    """裁剪 Vivado 原始 stdout：保留末 N 行 + 关键行不丢 + 可选存全文。
++
++    Args:
++        text: 原始输出文本。
++        max_lines: >0 时只保留末尾 max_lines 行；<=0 不裁剪（默认，向后兼容）。
++        save_full_to: 非空时把**完整** text 以 UTF-8 写到该路径。
++        notes: 追加在返回文本末尾的附加提示（如 rc 信息）。
++
++    Returns:
++        裁剪后的文本。未裁剪时与 text 完全一致（除非给了 save_full_to / notes）。
++
++    不变量：匹配 ``^\\s*(ERROR|CRITICAL WARNING|警告)`` 的行，即使落在被裁掉的
++    头部窗口里，也会在尾部「关键行」小节中原样列出（带原始行号）。
++    """
++    lines = text.splitlines()
++    total = len(lines)
++    saved_note = _save_full_text(text, save_full_to) if save_full_to else ""
++    keep = max(0, int(max_lines))
++
++    if keep <= 0 or total <= keep:
++        # 不裁剪：原样返回，仅在用户显式要求存全文时补一行提示
++        tail = ([saved_note] if saved_note else []) + list(notes)
++        return text + ("\n".join([""] + tail) if tail else "")
++
++    kept = lines[-keep:]
++    dropped = lines[:-keep]
++    n_err, n_cw, n_cn = _count_key_lines(lines)
++
++    summary = (
++        f"[截断] 原文 {total} 行 → 仅显示末 {keep} 行（max_lines={keep}）；"
++        f"全文 ERROR {n_err} 条 / CRITICAL WARNING {n_cw} 条"
++    )
++    if n_cn:
++        summary += f" / 警告 {n_cn} 条"
++
++    out: list[str] = [summary, *kept]
++
++    # 窗口内的关键行已在 kept 里；只有掉在窗口外（头部）的才需要单列补回
++    outside = [
++        (idx + 1, ln) for idx, ln in enumerate(dropped) if CRITICAL_LINE_RE.match(ln)
++    ]
++    if outside:
++        out.append("")
++        out.append(f"--- 关键行（不在末 {keep} 行窗口内，共 {len(outside)} 条）---")
++        out.extend(f"  L{lineno}: {ln.strip()}" for lineno, ln in outside)
++
++    tail = ([saved_note] if saved_note else []) + list(notes)
++    if tail:
++        out.append("")
++        out.extend(tail)
++    return "\n".join(out)
++
++
++# --------------------------------------------------------------------------- #
++#  执行 + 统一后处理
++# --------------------------------------------------------------------------- #
++
++_OK_NO_OUTPUT = "[OK] 命令执行成功（无输出）"
++
++# 坑 #75：占位符没独占 Tcl 词时，tcl_quote 拼出的 "a b" 会被 Tcl 拆成两词，
++# 报错形态是 close-quote / can not find channel named——对这种失败补一句人话提示。
++_QUOTE_TRAP_MARKERS = ("close-quote", "can not find channel named")
++_QUOTE_TRAP_HINT = (
++    "提示：占位符必须**独占一个 Tcl 词**。模板 `puts X={0}` 会拼成 "
++    '`puts X="a b"` 从而被 Tcl 拆成两词；请写 `puts {0}`。'
++)
++
++
++def _maybe_append_quote_hint(text: str, failed: bool) -> str:
++    """safe_tcl 执行失败且命中「占位符没独占词」特征时，追加中文提示。
++
++    ``failed`` 由执行层显式给出，不从文本猜——裁剪后首行变成 ``[截断] ...``，
++    靠 ``[ERROR]`` 前缀判断会漏掉「失败 + 裁剪」这条组合路径。
++    """
++    if not failed:
++        return text
++    if not any(marker in text for marker in _QUOTE_TRAP_MARKERS):
++        return text
++    return f"{text}\n{_QUOTE_TRAP_HINT}"
++
++
++async def _render_result(
++    session,
++    tcl: str,
++    timeout: float,
++    error_label: str,
++    max_lines: int,
++    save_full_to: str,
++) -> tuple[str, bool]:
++    """执行 Tcl 并按需裁剪输出，返回 ``(返回文本, 是否失败)``。
++
++    ``max_lines <= 0 且 save_full_to 为空`` 时**完全走原路径**（``_safe_execute``），
++    保证默认行为逐字节不变；否则重新取未截断的原始输出，才能裁出真正的末尾 N 行
++    （``TclResult.summary`` 超长时只保留前 50k 字符，尾部已经没了）。
++    """
++    if max_lines <= 0 and not save_full_to:
++        text = await _safe_execute(session, tcl, timeout, error_label)
++        # summary 的失败标记就是前缀 "[ERROR] (rc=N)"（见 TclResult.summary）
++        return text, text.lstrip().startswith("[ERROR]")
++
++    try:
++        result = await session.execute(tcl, timeout=float(timeout))
++    except Exception as e:
++        msg = f"[ERROR] {error_label}: {e}"
++        # Python 3.10 的 asyncio.TimeoutError 与内置 TimeoutError 是不同类型。
++        if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
++            msg += "\n等待响应超时不代表命令已停止，请先确认会话状态。"
++        return msg, True
++
++    payload = result.output or ""
++    failed = bool(result.is_error)
++    notes: list[str] = []
++    if failed:
++        # 失败标记必须留下：它可能在裁剪窗口之外
++        payload = f"[ERROR] (rc={result.return_code})\n{payload}"
++        notes.append(f"[失败] Tcl 返回码 rc={result.return_code}，请结合上方输出判断。")
++    if not payload.strip():
++        payload = _OK_NO_OUTPUT
++    return truncate_output(payload, max_lines, save_full_to, tuple(notes)), failed
++
+ 
+ @mcp.tool()
+ async def run_tcl(
+     command: str,
+     session_id: str = "default",
+     timeout: int = 120,
++    max_lines: int = 0,
++    save_full_to: str = "",
+     ctx: Context = None,
+ ) -> str:
+     r"""执行任意 Vivado Tcl 命令。支持所有 Vivado Tcl API。
+@@ -146,12 +322,23 @@
+             命令会排队等它跑完。长任务(综合/实现/比特流)请改用
+             run_synthesis / run_implementation / generate_bitstream
+             (Python 轮询不阻塞),或按预期耗时调大本值。
++        max_lines: 输出裁剪行数，默认 0 = 不限（行为与旧版完全一致）。
++            >0 时只保留原文**末尾** max_lines 行，并在开头加一行摘要，例如
++            ``[截断] 原文 1234 行 → 仅显示末 200 行（max_lines=200）；
++            全文 ERROR 2 条 / CRITICAL WARNING 1 条``。
++            **安全保证**：凡匹配 ``^\\s*(ERROR|CRITICAL WARNING|警告)`` 的行，
++            即使落在被裁掉的头部窗口里，也会在尾部「关键行」小节补回，绝不丢错误。
++        save_full_to: 可选文件路径。非空时把**完整**输出以 UTF-8 写到该文件，
++            返回文本里附上该路径（配合 max_lines 实现「裁剪 + 留全文」两全）。
+     """
+     session = _require_session(ctx, session_id)
+     if not session:
+         return _NO_SESSION.format(sid=session_id)
+ 
+-    return await _safe_execute(session, command, float(timeout), "命令执行失败")
++    text, _failed = await _render_result(
++        session, command, float(timeout), "命令执行失败", max_lines, save_full_to
++    )
++    return text
+ 
+ 
+ @mcp.tool()
+@@ -160,6 +347,8 @@
+     args: list[str] = None,
+     session_id: str = "default",
+     timeout: int = 120,
++    max_lines: int = 0,
++    save_full_to: str = "",
+     ctx: Context = None,
+ ) -> str:
+     """执行带参数的 Tcl 命令模板，自动用 Tcl list 规则转义参数。
+@@ -178,11 +367,19 @@
+     template 用 Python format 的 ``{0}`` / ``{1}`` 占位符，args 中每个元素会被
+     ``tcl_quote()`` 包装成 ``"..."`` 并转义所有特殊字符。
+ 
++    **占位符必须独占一个 Tcl 词**（坑 #75）：``puts X={0}`` 会拼成
++    ``puts X="a b"``，被 Tcl 拆成两词后报 close-quote / can not find channel
++    named；正确写法是 ``puts {0}``。执行失败且命中该特征时，返回文本末尾会附提示。
++
+     Args:
+         template: Tcl 命令模板，用 {0}/{1}/... 表示参数位置。
+         args: 参数值列表，将被自动转义。
+         session_id: 目标会话 ID，默认 "default"。
+         timeout: 命令执行超时秒数，默认 120。
++        max_lines: 输出裁剪行数，默认 0 = 不限（行为与旧版完全一致）；>0 时只保留
++            末尾 max_lines 行 + 开头摘要，且 ``ERROR`` / ``CRITICAL WARNING`` /
++            ``警告`` 行即使落在窗口外也会在尾部「关键行」小节补回。
++        save_full_to: 可选文件路径，非空时把完整输出以 UTF-8 落盘并在返回里给出路径。
+     """
+     if args is None:
+         args = []
+@@ -199,4 +396,7 @@
+     if not session:
+         return _NO_SESSION.format(sid=session_id)
+ 
+-    return await _safe_execute(session, cmd, float(timeout), "safe_tcl 执行失败")
++    rendered, failed = await _render_result(
++        session, cmd, float(timeout), "safe_tcl 执行失败", max_lines, save_full_to
++    )
++    return _maybe_append_quote_hint(rendered, failed)

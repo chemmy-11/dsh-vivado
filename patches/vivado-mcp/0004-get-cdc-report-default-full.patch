@@ -1,0 +1,27 @@
+--- a/vivado_mcp/tools/cdc_tools.py
++++ b/vivado_mcp/tools/cdc_tools.py
+@@ -20,7 +20,7 @@
+ @mcp.tool()
+ async def get_cdc_report(
+     session_id: str = "default", ctx: Context = None,
+-    report_file: str = "", max_details: int = 100,
++    report_file: str = "", max_details: int = 0,
+ ) -> str:
+     """解析 CDC 报告，按时钟对、严重级别和规则计数并返回有界明细 JSON。
+ 
+@@ -29,10 +29,14 @@
+     未验证完整时钟/IO 约束覆盖，默认报告可能隐藏豁免；signoff 始终 false，
+     空结果或 All paths are Safely Timed 不代表 CDC clean。本工具不修改约束。
+ 
++    **默认全量（``max_details=0``）**：CDC 违例是逐条可修的工程细节，默认值不得替
++    调用方决定「哪些条目不必看」（与 xdc_lint 同一原则，见坑 #76）。上限 500 是工具
++    自身的界，不是默认裁剪；嫌长时显式传小的 ``max_details``。
++
+     Args:
+         session_id: 现场查询会话 ID。
+         report_file: 可选本地原始 report_cdc -details 文本，最多 16 MiB，无需会话。
+-        max_details: 返回明细上限，0..500；超过上限仍统计完整输入并明确截断。
++        max_details: 返回明细上限，0（默认）= 不限（至多 500）；超过上限仍统计完整输入并明确截断。
+     """
+     provenance = {"source": "report_file" if report_file else "live",
+                   "report_file": report_file, "session_id": "" if report_file else session_id}

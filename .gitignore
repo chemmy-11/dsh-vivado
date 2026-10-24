@@ -1,0 +1,12 @@
+# Build artifacts: the rendered patch and the effective config are machine-specific.
+# They are produced by install.ps1 (into the staging copy, never committed from here).
+/cordis.patch.yml
+/config.yml
+/.tmp-render/
+/.tmp-cfg-*.yml
+*.bak-*
+*.bak
+
+# Never part of a bundle
+/node_modules/
+/.git/

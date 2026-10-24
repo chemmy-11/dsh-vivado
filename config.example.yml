@@ -1,0 +1,25 @@
+# dsh-vivado — environment config (flat `key: value`, no YAML module needed).
+# install.ps1 rewrites this file with the values it actually detected/used.
+# doctor.ps1 re-reads it. Keep every path ASCII: Vivado's Tcl layer breaks on non-ASCII paths.
+
+# ---- device / project -------------------------------------------------------
+part: xcku060-ffva1156-2-i
+project_root: D:/FPGA
+
+# ---- Vivado ----------------------------------------------------------------
+# vivado_version selects the persona tier: 2023.1  (anything < 2025.2)  or  2025.2plus
+vivado_version: 2023.1
+# directory that contains vivado.bat (usually <install>/Vivado/<version>/bin)
+vivado_path: D:/Xilinx/Vivado/2023.1/bin
+
+# ---- vivado-mcp ------------------------------------------------------------
+# python that can `import vivado_mcp` (the venv the MCP server runs in)
+python: D:/vivado-mcp/venv/Scripts/python.exe
+# directory added to PYTHONPATH so `import vivado_mcp` resolves
+vivado_mcp_site: D:/vivado-mcp/site
+# working directory of the MCP server process (must be ASCII)
+vivado_mcp_cwd: D:/FPGA
+
+# ---- scratch ---------------------------------------------------------------
+# TEMP/TMP handed to the MCP server and used for Vivado scratch work (must be ASCII)
+temp_dir: D:/FPGA/.tmp

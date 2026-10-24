@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "generated_by": "tools/gen_skills_manifest.py",
+  "source_hash": "18d52556c107eef216bda8c72542fa9e8700b29dd4315868b1b9c5e35861f6e4",
+  "tool_catalog": {
+    "available": false,
+    "source": "not-embedded",
+    "note": "本包随包发布的是技能，工具面不写进清单；真机由 doctor.ps1 探测（KIT-SPEC §7 检查 7：mcp_ctl.py list 应列出 32 个 mcp__vivado__*）",
+    "mcp_vivado": []
+  },
+  "skills": [
+    {
+      "name": "amd-doc-search",
+      "dir": "amd-doc-search",
+      "version": "1.0.0",
+      "description": "检索 AMD/Xilinx 官方文档（Vivado/Vitis/UG/PG/Answer Record 等 612K+ 页，可按器件系列与版本过滤）。当问题涉及 Vivado Tcl 命令、UG901/UG906/UG949、时序/CDC/AXI/Aurora/MIG 等需要官方文档依据时使用：运行 `py <本技能目录>\\doc_search.py \"<query>\"`，并引用返回的 docs.…",
+      "license": null,
+      "references": [
+        "doc_search.py"
+      ],
+      "artifacts": [],
+      "scripts": [
+        "doc_search.py"
+      ],
+      "baseline": {
+        "amd_doc": "unspecified",
+        "tested_on": null,
+        "status": "unverified",
+        "evidence": "doc_search.py 实跑 PASS 2026-10-24（py doc_search.py 'report_timing_summary' --version 2023.1 --limit 2 → exit 0, 3.09s, server=AMD Doc Search 0.11.6, 命中 UG835）；技能不调用 Vivado，无 2023.1 适用项"
+      }
+    },
+    {
+      "name": "hw-ila-debug",
+      "dir": "hw-ila-debug",
+      "version": "1.2.2",
+      "description": "Interact with ILA debug cores via vivado-mcp or chipscope-mcp. Discover cores, configure triggers, arm, capture, upload, export waveform data (CSV/VCD), and analyze results. ILA in vivado-mcp supports…",
+      "license": "MIT",
+      "references": [
+        "REFERENCE.md"
+      ],
+      "artifacts": [
+        "REPORT.md",
+        "report_data.json"
+      ],
+      "scripts": [],
+      "baseline": {
+        "amd_doc": "2026.1",
+        "tested_on": null,
+        "status": "unverified",
+        "evidence": "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节覆盖度表未含 ILA 硬件链路，需真板+ILA core）"
+      }
+    },
+    {
+      "name": "hw-vio-debug",
+      "dir": "hw-vio-debug",
+      "version": "1.2.2",
+      "description": "Interact with VIO debug cores via vivado-mcp or chipscope-mcp. Read input probes, drive output probes, monitor activity, and reset outputs. vivado-mcp supports all device families. chipscope-mcp suppo…",
+      "license": "MIT",
+      "references": [
+        "REFERENCE.md"
+      ],
+      "artifacts": [
+        "REPORT.md",
+        "vio_snapshot.json"
+      ],
+      "scripts": [],
+      "baseline": {
+        "amd_doc": "2026.1",
+        "tested_on": null,
+        "status": "unverified",
+        "evidence": "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节覆盖度表未含 VIO 硬件链路，需真板+VIO core）"
+      }
+    },
+    {
+      "name": "vivado-revision-control",
+      "dir": "vivado-revision-control",
+      "version": "1.0.0",
+      "description": "Comprehensive Vivado project revision control strategies for standard, DFX (Partial Reconfiguration), IPI Block Design Container, and Segmented Configuration projects. Includes automated tools for pro…",
+      "license": "MIT",
+      "references": [],
+      "artifacts": [
+        "build.tcl",
+        "run_pipeline.tcl"
+      ],
+      "scripts": [
+        "helper-procedures/helper_scripts.tcl"
+      ],
+      "baseline": {
+        "amd_doc": "2026.1",
+        "tested_on": null,
+        "status": "unverified",
+        "evidence": "SKILL.md:14 本机适配注记『Vivado 2023.1（官方基线 2026.1）』，frontmatter 无 compatibility；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节）"
+      }
+    },
+    {
+      "name": "vivado-rtl-elaboration-analysis",
+      "dir": "vivado-rtl-elaboration-analysis",
+      "version": "1.0.0",
+      "description": "Analyze Vivado Oasys synthesis elaboration errors, critical warnings, and warnings from synthesis logs and provide actionable RTL code fixes. Log analysis is the primary mode; an active Vivado session…",
+      "license": "MIT",
+      "references": [
+        "csv_to_per_file_parts.py",
+        "message-handlers.md",
+        "parse_elab_messages.py",
+        "report-format.md",
+        "resolution-guide.md",
+        "tcl-reference.md"
+      ],
+      "artifacts": [
+        "resolution_checklist.md"
+      ],
+      "scripts": [
+        "csv_to_per_file_parts.py",
+        "parse_elab_messages.py"
+      ],
+      "baseline": {
+        "amd_doc": "2026.1",
+        "tested_on": "2023.1",
+        "status": "verified",
+        "evidence": "parse_elab_messages.py 实跑 PASS 2026-10-24：输入 prj/project_1/project_1.runs/synth_1/runme.log（该文件第 7 行 = Vivado v2023.1 (64-bit)）→ Parsed 67 elaboration messages（WARNING 29 / INFO 38），exit 0，CSV 68 行；仅解析路径实测，完整分析报告未跑"
+      }
+    },
+    {
+      "name": "vivado-rtl-lint",
+      "dir": "vivado-rtl-lint",
+      "version": "1.0.0",
+      "description": "Run Vivado's RTL linter to detect design issues before synthesis. Use when user asks to \"lint RTL\", \"check HDL code\", \"run linter\", \"find RTL issues\", or \"check design quality\". This skill ONLY analyz…",
+      "license": "MIT",
+      "references": [
+        "examples/report-clean.md",
+        "examples/report-violations.md",
+        "parse_lint_report.py",
+        "report-format.md",
+        "resolution-guide.md",
+        "tcl-reference.md",
+        "violation-handlers.md"
+      ],
+      "artifacts": [],
+      "scripts": [
+        "parse_lint_report.py"
+      ],
+      "baseline": {
+        "amd_doc": "2026.1",
+        "tested_on": null,
+        "status": "unverified",
+        "evidence": "无真实 2023.1 lint 报告（全盘 .rpt 仅 *_utilization_synth.rpt）故未取得 2023.1 证据；parse_lint_report.py 仅在构造样例上验证可执行（exit 0，2 行 CSV），不计 verified"
+      }
+    },
+    {
+      "name": "vivado-simulate-rtl",
+      "dir": "vivado-simulate-rtl",
+      "version": "1.0.0",
+      "description": "Runs and diagnoses FPGA RTL simulations through Vivado using XSim, Questa, ModelSim, VCS, Xcelium, Riviera-PRO, or Active-HDL; supports approval-gated interactive repair; creates self-checking testben…",
+      "license": "MIT",
+      "references": [
+        "references/",
+        "references/activehdl.md",
+        "references/adding-a-simulator.md",
+        "references/cross-simulator-arbitration.md",
+        "references/diagnostics.md",
+        "references/environment-preflight.md",
+        "references/guided-interactive-repair.md",
+        "references/headless-waveform.md",
+        "references/known-issue-research.md",
+        "references/minimal-reproducer.md",
+        "references/modelsim.md",
+        "references/other-vivado-simulators.md",
+        "references/questa.md",
+        "references/riviera.md",
+        "references/simulation-performance.md",
+        "references/vcs.md",
+        "references/version-bisect.md",
+        "references/xcelium.md",
+        "references/xsim-activity-capture.md",
+        "references/xsim-advanced-verification.md",
+        "references/xsim-coverage-closure.md",
+        "references/xsim-error-signatures.md",
+        "references/xsim.md",
+        "scripts/",
+        "scripts/sim_env_doctor.py"
+      ],
+      "artifacts": [],
+      "scripts": [
+        "scripts/sim_env_doctor.py",
+        "scripts/validate_skill.py"
+      ],
+      "baseline": {
+        "amd_doc": "2025.2, 2026.1",
+        "tested_on": null,
+        "status": "unverified",
+        "evidence": "SKILL.md:5 compatibility=validated on 2025.2 and 2026.1（AMD 自述，非本机 2023.1）；无 2023.1 实测记录（本轮禁跑综合/实现/仿真，SPEC 5.1）"
+      }
+    },
+    {
+      "name": "vivado-workflow-discipline",
+      "dir": "vivado-workflow-discipline",
+      "version": "1.0.0",
+      "description": "Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail…",
+      "license": "NOASSERTION",
+      "references": [
+        "mcp_ctl.py"
+      ],
+      "artifacts": [],
+      "scripts": [],
+      "baseline": {
+        "amd_doc": "unspecified",
+        "tested_on": null,
+        "status": "unverified",
+        "evidence": "本技能是流程/判据说明，无脚本、无可执行产物，故自身无基线可测；文中标 `本仓记录` 的版本事实转述自 PITFALLS #64/#67/#72/#73/#74，本技能未复测，故整条记 unverified"
+      }
+    }
+  ]
+}

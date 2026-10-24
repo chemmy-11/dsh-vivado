@@ -1,0 +1,159 @@
+--- a/vivado_mcp/analysis/xdc_linter.py
++++ b/vivado_mcp/analysis/xdc_linter.py
+@@ -325,8 +325,77 @@
+     return report
+ 
+ 
+-def format_lint_report(report: LintReport) -> str:
+-    """格式化 lint 报告为中文文本。"""
++_SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
++_SEVERITY_LABELS = {"error": "ERROR", "warning": "WARNING", "info": "INFO"}
++# 端口名末尾的总线下标：c0_ddr4_dq[31] -> c0_ddr4_dq
++_PORT_INDEX_RE = re.compile(r"\[\d+(?::\d+)?\]$")
++# 聚合括注里最多列几个端口族/文件，超过用「共 N 族」收口
++_MAX_BREAKDOWN_LABELS = 6
++# 少于这个条数就不做端口族聚合（直接点端口名更好读）
++_BREAKDOWN_MIN_ISSUES = 4
++
++
++def _port_family(port: str) -> str:
++    """端口名归一成「族」：c0_ddr4_dq[31] -> c0_ddr4_dq，gt_refclk_p 原样。"""
++    if not port:
++        return "(未命名端口)"
++    return _PORT_INDEX_RE.sub("", port) or port
++
++
++def _rule_breakdown(issues: list[LintIssue]) -> str:
++    """给一条规则生成「这么多条是从哪来的」聚合括注。
++
++    MISSING_IOSTANDARD 一次几百条时，端口族分布才是有效信息
++    （c0_ddr4_dq 64 / c0_ddr4_adr 21 ...）；条数少时直接点端口名。
++    """
++    ports = [i.port for i in issues if i.port]
++
++    if len(issues) >= _BREAKDOWN_MIN_ISSUES and ports:
++        counts: dict[str, int] = {}
++        for p in ports:
++            fam = _port_family(p)
++            counts[fam] = counts.get(fam, 0) + 1
++        ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
++        shown = " / ".join(f"{fam} {n}" for fam, n in ranked[:_MAX_BREAKDOWN_LABELS])
++        if len(ranked) > _MAX_BREAKDOWN_LABELS:
++            shown += f" / …（共 {len(ranked)} 族）"
++        return f"（端口族：{shown}）"
++
++    if ports:
++        uniq = list(dict.fromkeys(ports))
++        shown = " / ".join(uniq[:_MAX_BREAKDOWN_LABELS])
++        if len(uniq) > _MAX_BREAKDOWN_LABELS:
++            shown += f" / …（共 {len(uniq)} 个端口）"
++        return f"（端口：{shown}）"
++
++    file_counts: dict[str, int] = {}
++    for issue in issues:
++        name = Path(issue.file).name
++        file_counts[name] = file_counts.get(name, 0) + 1
++    if len(file_counts) > 1:
++        ranked = sorted(file_counts.items(), key=lambda kv: (-kv[1], kv[0]))
++        shown = " / ".join(f"{n} {c}" for n, c in ranked[:_MAX_BREAKDOWN_LABELS])
++        return f"（文件：{shown}）"
++    return ""
++
++
++def format_lint_report(
++    report: LintReport,
++    severity: str = "all",
++    max_items: int = 0,
++) -> str:
++    """格式化 lint 报告为中文文本。
++
++    输出分三段：先按规则聚合的摘要（永远覆盖全量，不受 max_items 限制），
++    再列明细，最后在**显式**要求裁剪时明写「还有 N 条未显示」。
++
++    Args:
++        report: lint 结果。
++        severity: ``all``（默认，全部）/ ``error`` / ``warning`` 只显示该级别。
++            非法值按 ``all`` 处理（由调用方负责校验并给用户报错）。
++        max_items: 明细分条上限。``0``（默认）= 不限、输出全量；负数等同 0。
++            检查类工具默认必须无损：省上下文只能由调用方显式选择。
++    """
+     lines: list[str] = []
+ 
+     if not report.issues:
+@@ -343,18 +412,71 @@
+         header += f"WARN ({n_warn} warnings) ==="
+     lines.append(header)
+     lines.append(f"扫描文件: {len(report.files_checked)}")
++
++    sev_filter = severity if severity in ("error", "warning") else "all"
++    selected = (
++        report.issues
++        if sev_filter == "all"
++        else [i for i in report.issues if i.severity == sev_filter]
++    )
++    hidden = len(report.issues) - len(selected)
++
++    # --- 第一段：按规则聚合（全量，保证没有规则被 max_items 隐藏）---
+     lines.append("")
++    lines.append("--- 按规则聚合（全量）---")
++    grouped: dict[str, list[LintIssue]] = {}
++    for issue in report.issues:
++        grouped.setdefault(issue.rule, []).append(issue)
++    for rule, subset in sorted(
++        grouped.items(),
++        key=lambda kv: (
++            _SEVERITY_ORDER.get(kv[1][0].severity, 9),
++            -len(kv[1]),
++            kv[0],
++        ),
++    ):
++        lines.append(
++            f"  [{subset[0].severity}] {rule}: {len(subset)} 条"
++            f"{_rule_breakdown(subset)}"
++        )
+ 
+-    # 按严重级分组展示
+-    for sev, label in [("error", "ERROR"), ("warning", "WARNING"), ("info", "INFO")]:
+-        subset = [i for i in report.issues if i.severity == sev]
++    if not selected:
++        lines.append("")
++        lines.append(
++            f"severity={sev_filter} 下没有问题；全量报告共 {len(report.issues)} 条，"
++            f"已隐藏 {hidden} 条其它级别问题。用 severity=all 看全部。"
++        )
++        return "\n".join(lines).rstrip()
++
++    # --- 第二段：明细（受 max_items 预算约束，按 error → warning → info 顺序）---
++    limit = max(0, int(max_items))
++    shown = 0
++    total = len(selected)
++    for sev in ("error", "warning", "info"):
++        subset = [i for i in selected if i.severity == sev]
+         if not subset:
+             continue
+-        lines.append(f"--- {label} ({len(subset)} 条) ---")
++        lines.append("")
++        lines.append(f"--- {_SEVERITY_LABELS[sev]} ({len(subset)} 条) ---")
+         for issue in subset:
++            if limit and shown >= limit:
++                break
+             file_name = Path(issue.file).name
+             lines.append(f"  [{issue.rule}] {file_name}:{issue.line}")
+             lines.append(f"    {issue.message}")
+-        lines.append("")
++            shown += 1
++
++    # 第三段：被预算 / 级别过滤挡掉多少，明写出来（不静默截断）
++    lines.append("")
++    if sev_filter != "all":
++        lines.append(
++            f"（severity={sev_filter}：已隐藏 {hidden} 条其它级别问题；"
++            "用 severity=all 看全部）"
++        )
++    if shown < total:
++        lines.append(
++            f"还有 {total - shown} 条未显示（max_items={limit}），"
++            "用 max_items=0 看全部。"
++        )
+ 
+     return "\n".join(lines).rstrip()
