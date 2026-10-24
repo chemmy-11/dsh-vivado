@@ -3,9 +3,9 @@
 # This file exists to prove that the 22 plugin rows inside the rendered patch are the shipped
 # `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` content, not hand-copied text.
 # Source: the previously verified project-local bundle patch
-#   <vault>\.dsh\bundles\vivado-preset\cordis.patch.yml
+#   作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml
 #   (proven byte-identical to the shipped preset in
-#    结论_cross_Vivado环境DSH规范化_2026-10-24.md §2.2)
+#    作者本机的规范化取证记录（未随仓库发布） §2.2)
 # Rows 2-22 below are byte-identical to that source (line endings normalized to LF).
 # The persona row is intentionally replaced by a comment: the pre-kit persona was OUR text and
 # carried the author's absolute paths, so it must not travel inside a distributed kit.

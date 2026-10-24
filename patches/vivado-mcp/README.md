@@ -2,7 +2,7 @@
 
 > 归档日期 2026-10-24 · 维护：`ps-docs` · 作用域：本目录只放 **补丁文件**，不放第三方源码。
 > 一句话：`vivado-mcp` 是**第三方**资产（Apache-2.0，版本 0.3.26），本 kit 既不是它的作者，也不做它的私有分支；
-> 我们只在它上面打了 4 个改动，以 `.patch` 形式随包，便于同门复核、上游报 PR、或随时反向卸载。
+> 我们只在它上面打了 4 个改动，以 `.patch` 形式随包，便于使用者复核、上游报 PR、或随时反向卸载。
 
 ---
 
@@ -86,7 +86,7 @@ py -c "import base64,hashlib,os;root=r'<vivado-mcp>/site';mod=[];[mod.append(p.s
 ### 3.4 `0004-get-cdc-report-default-full.patch`（`cdc_tools.py`）
 
 - `get_cdc_report(..., max_details: int = 0)`（`:23`）：由 `100` → **`0` = 全量**（工具自身界仍是 0..500），并在 docstring 写明理由（`:32-34`），修 `PITFALLS.md:86`（坑 #76 同族：CDC 违例同样是逐条可修的细节）。
-- 现场路径仍是 `report_cdc -details -return_string`（`:53`）——**这一条在 2023.1 上尚未实测**（`结论_cross_Vivado环境DSH规范化_2026-10-24.md` §5 第 4 项把 `get_cdc_report` 列为未触达工具），见 `..\..\docs\version-matrix.md`。
+- 现场路径仍是 `report_cdc -details -return_string`（`:53`）——**这一条在 2023.1 上尚未实测**（作者本机的规范化取证记录（未随仓库发布）§5 第 4 项把 `get_cdc_report` 列为未触达工具），见 `..\..\docs\version-matrix.md`。
 
 ## 3.5 许可合规（Apache-2.0，第一次用请读这 20 行）
 
@@ -177,7 +177,7 @@ Select-String -SimpleMatch 'max_details: int = 0'  -Path vivado_mcp\tools\cdc_to
 
 ## 6. 上游政策：PR 优先，不做私有分支
 
-- **不做私有 fork**：`<vivado-mcp>\site` 不是我们的仓库，我们**不重分发修改后的源码**，只随包给 `.patch`；本 kit 也不包含 `vivado-mcp` 本体（同门用 `pip install vivado-mcp==0.3.26` 自装）。
+- **不做私有 fork**：`<vivado-mcp>\site` 不是我们的仓库，我们**不重分发修改后的源码**，只随包给 `.patch`；本 kit 也不包含 `vivado-mcp` 本体（用 `pip install vivado-mcp==0.3.26` 自装）。
 - **优先上游 PR**：按 Apache-2.0 §4(b)，被修改的文件必须带「已修改」提示；把改动留在我们自己的 patch 里、由使用者显式应用，比静默发一份改过的源码更符合该义务（也让上游可审）。`0001`–`0004` 每条都能独立成 PR；`docs/version-matrix.md` 与 `skills/` 里引用了坑号，PR 描述可直接抄 §3。
 - 上游若接受（或自己改了同名默认值），本目录对应补丁应删除并在 `NOTICE` §2 记录「已上游化」。
 

@@ -148,7 +148,7 @@
 
 ```powershell
 # ---------- 0) asar 读取器（本 kit 的 tools 里没有，用临时脚本或任意 asar 解包工具）----------
-#   本项目里的探针：<repo>\ase.py 等价物见 结论_cross_*_2026-10-24.md §8
+#   任意 ASAR 解包工具即可（本仓库不含解包器；Electron 的 app.asar 是标准格式）
 
 # ---------- 1) AMD：子树 MIT + 外层专有协议 + 上游仓库 ----------
 py -c "import zipfile;z=zipfile.ZipFile(r'%USERPROFILE%\Downloads\vivado-ai-extension-2026.9.1.vsix');print(z.read('extension/resources/plugin-bundled/LICENSE').decode()[:80])"

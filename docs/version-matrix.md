@@ -1,7 +1,7 @@
 # 版本真值分档表（T4） — Vivado `2023.1` vs `2025.2+`
 
 > 归属：`dsh-vivado` · 作者：`ps-docs` · 2026-10-24
-> 目的：把「Vivado 版本相关的真值」从 persona/技能里抽出来、按档标注，**不让同门把 2026.1 文档当 2023.1 事实用**。
+> 目的：把「Vivado 版本相关的真值」从 persona/技能里抽出来、按档标注，**不让使用者把 2026.1 文档当 2023.1 事实用**。
 > 配套：`README.md`（安装）、`NOTICE`（来源/许可）、`templates/persona/2023.1.frag.yml` / `2025.2plus.frag.yml`（片段）、`patches/vivado-mcp/README.md`（MCP 补丁）。
 
 > **读法（公开版）**：文中出现的 `<project_root>` = 你在 `config.yml` 里配置的工程根；`<vivado-mcp>` = 你的 vivado-mcp 安装目录；
@@ -16,7 +16,7 @@
 | **文档/未实测** | 只有官方文档、技能自述或他人记录，**本机没量过** | 必须写「待实测」，不得据此下结论；引用时要说明是文档基线 |
 | **历史记录（不算实测）** | 本机在**过去**某档真跑过（该 Vivado 已卸载，不可复现） | 只作旁证，不改写成本档实测 |
 
-> 本仓库口径（`<project_root>\AGENTS.md` §二「两轴采信规则」、`结论_cross_Vivado环境DSH规范化_2026-10-24.md` §0）：
+> 本仓库口径（`<project_root>\AGENTS.md` §二「两轴采信规则」、作者本机的规范化取证记录（未随仓库发布）§0）：
 > 官方文档与官方技能的基线是 **2026.1**，而**本机现装的是 2023.1** —— 两者冲突时以**本机实测**为准，并明确说出「这是实测，不是文档保证」。
 
 ## 1. 档位选择规则（kit 侧唯一规则）
@@ -52,7 +52,7 @@
 
 | 档 | 值 | 标记与证据 |
 |---|---|---|
-| `2023.1` | 下列写法**实测可用**：`report_utilization -file <path>`（另有 `-pb <path>`，见综合 run 自动生成）、`report_timing_summary -file <path>`；`report_cdc -details -return_string` **在 2023.1 上未实测** | **实测**（前两条）·本机 2023.1：`docs/操作文档/阶段三_prj10_第一级内存插入集成执行单_2026-10-04.md:200`（`report_utilization -file $P/report_util_synth.rpt`）、同文件 `:209`（`report_timing_summary -file $P/report_timing.rpt`）；自动产物见 `prj/project_1/project_1.runs/synth_1/runme.log:351`（`report_utilization -file design_1_wrapper_utilization_synth.rpt -pb design_1_wrapper_utilization_synth.pb`）。<br>**文档/未实测**（`report_cdc`）：`vivado-mcp` 0.3.26 现场路径会执行 `report_cdc -details -return_string`（`<vivado-mcp>\site\vivado_mcp\tools\cdc_tools.py:53`），但该工具在本机**从未被触发**（`结论_cross_Vivado环境DSH规范化_2026-10-24.md` §5 第 4 项的未触达工具清单含 `get_cdc_report`） |
+| `2023.1` | 下列写法**实测可用**：`report_utilization -file <path>`（另有 `-pb <path>`，见综合 run 自动生成）、`report_timing_summary -file <path>`；`report_cdc -details -return_string` **在 2023.1 上未实测** | **实测**（前两条）·本机 2023.1：EIF 仓库 `docs/操作文档/阶段三_prj10_第一级内存插入集成执行单_2026-10-04.md:200`（`report_utilization -file $P/report_util_synth.rpt`）、同文件 `:209`（`report_timing_summary -file $P/report_timing.rpt`）；自动产物见 `prj/project_1/project_1.runs/synth_1/runme.log:351`（`report_utilization -file design_1_wrapper_utilization_synth.rpt -pb design_1_wrapper_utilization_synth.pb`）。<br>**文档/未实测**（`report_cdc`）：`vivado-mcp` 0.3.26 现场路径会执行 `report_cdc -details -return_string`（`<vivado-mcp>\site\vivado_mcp\tools\cdc_tools.py:53`），但该工具在本机**从未被触发**（作者本机的规范化取证记录（未随仓库发布）§5 第 4 项的未触达工具清单含 `get_cdc_report`） |
 | `2025.2+` | **参数集按版本变，逐条待实测** | **文档/未实测**。**不要从任何手册/技能里抄 flag**；上机用 `report_<name> -help`（如 `report_timing_summary -help`）看该版本支持的参数，或 `info commands report_*` 列出该版本有哪些 `report_` 命令 |
 
 > 经验规则（与档无关）：`report_*` 的**输出文件参数**在 2023.1 上是 `-file`；`-return_string` 也存在（vivado-mcp 的 `cdc_tools.py:53` 用法）。凡是「新手册里见过、本机没跑过」的参数，一律先 `-help`。
@@ -198,4 +198,4 @@ Select-String -Path '<project_root>\prj\project_1\project_1.runs\synth_1\runme.l
 | 官方文档基线 2026.1（本仓库规则） | `<project_root>\docs\参考_cross_AI工具链_AMD官方skill与知识库_2026-10-18.md:70`、`:72` |
 | 档位规则实现 | `D:\dsh-vivado\tools\render_patch.ps1:76-87`；`KIT-SPEC.md:79` |
 | MCP 侧 `report_cdc` 现场调用（代码证据，未实测行为） | `<vivado-mcp>\site\vivado_mcp\tools\cdc_tools.py:53` |
-| 结论文档：`get_cdc_report` 属未触达工具 | `<vault>\结论_cross_Vivado环境DSH规范化_2026-10-24.md` §5 第 4 项 |
+| 结论文档：`get_cdc_report` 属未触达工具 | 作者本机的规范化取证记录（未随仓库发布）§5 第 4 项 |

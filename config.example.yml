@@ -4,7 +4,7 @@
 
 # ---- device / project -------------------------------------------------------
 part: xcku060-ffva1156-2-i
-project_root: D:/FPGA
+project_root: D:/fpga_project
 
 # ---- Vivado ----------------------------------------------------------------
 # vivado_version selects the persona tier: 2023.1  (anything < 2025.2)  or  2025.2plus
@@ -18,8 +18,8 @@ python: D:/vivado-mcp/venv/Scripts/python.exe
 # directory added to PYTHONPATH so `import vivado_mcp` resolves
 vivado_mcp_site: D:/vivado-mcp/site
 # working directory of the MCP server process (must be ASCII)
-vivado_mcp_cwd: D:/FPGA
+vivado_mcp_cwd: D:/fpga_project
 
 # ---- scratch ---------------------------------------------------------------
 # TEMP/TMP handed to the MCP server and used for Vivado scratch work (must be ASCII)
-temp_dir: D:/FPGA/.tmp
+temp_dir: D:/fpga_project/.tmp

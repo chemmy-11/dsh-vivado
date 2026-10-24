@@ -1,12 +1,12 @@
 # KIT-SPEC — dsh-vivado 团队契约（2026-10-24）
 
-> 所有队友**先读本文件**。任务书原文：`<vault>\任务书_dsh-vivado插件包分发_2026-10-24.md`
-> 前序事实：`<vault>\结论_cross_Vivado环境DSH规范化_2026-10-24.md`
+> 所有队友**先读本文件**。任务书原文：`作者本机笔记库\本项目的需求契约（未随仓库发布）`
+> 前序事实：`作者本机笔记库\作者本机的规范化取证记录（未随仓库发布）`
 
 ## 0. 一句话目标
 
 把「Vivado 专用会话预设 + AMD 官方 6 技能 + 文档检索 + 已打补丁的 vivado-mcp」打成一个
-**DSH bundle 插件包**，同门「一条命令 + 重启」即可获得同等环境。
+**DSH bundle 插件包**，使用者「一条命令 + 重启」即可获得同等环境。
 
 ## 1. 交付根目录（唯一写作用域根）
 
@@ -14,7 +14,7 @@
 D:\dsh-vivado\
 ```
 
-**不要**往 vault（`<vault>\.dsh\`）或 `<project_root>` 其它目录写东西。
+**不要**往 vault（`作者本机笔记库\.dsh\`）或 `<project_root>` 其它目录写东西。
 **不要**改在有 desktop profile（`<DSH_HOME>\profiles\desktop\`）。
 **不要** git commit、不要 `plugin_manager` 安装到在用的 desktop profile（Lead 负责受控测试）。
 
@@ -26,7 +26,7 @@ D:\dsh-vivado\
 | `cordis.patch.yml` | Lead（**由模板渲染，不手写**） | 预设行 + skill-filesystem 行 + mcp-vivado 行 |
 | `config.example.yml` / `config.yml` | Lead | 扁平 `key: value`，见 §4 |
 | `lib/common.ps1` | Lead | PowerShell 公共函数（读 config、定位 DSH、备份、日志） |
-| `templates/preset.patch.yml.tmpl` | Lead | 带 `{{PLACEHOLDER}}` 的 YAML 模板 |
+| `templates/preset.patch.yml.tmpl` | Lead | 带 `{{PLACEHOLDER}}` 的 YAML 模板（模板契约 9 个 + 渲染器 `$values` 14 键，多出来的 5 个只在 persona 片段里用） |
 | `tools/render_patch.ps1` | Lead | 渲染器：config → cordis.patch.yml |
 | `install.ps1` / `uninstall.ps1` | **ps-installer** | 装/卸；调 `tools/render_patch.ps1` |
 | `docs/install.md` | **ps-installer** | 安装/卸载/回退说明书 |
@@ -52,7 +52,7 @@ D:\dsh-vivado\
    （等价于 `plugin_manager install_bundle`；由 CLI 的 reconcile 写入 `dsh.profile.bundles`）；
 5. 备份被改的 profile 文件为 `*.bak-<YYYYMMDD>`，打印**必须重启宿主**。
 
-装完的结构（在同门的 `~/.dsh`）：
+装完的结构（在使用者的 `~/.dsh`）：
 
 ```
 ~/.dsh/bundles/dsh-vivado/     ← staging（bundle 本体，含 skills/）
@@ -88,7 +88,7 @@ temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
 3. 末尾追加 `mcp-vivado` 行（`@deepseek-ai/dsh-mcp-client`，stdio，32 工具）。
 
 **shipped 22 行的唯一权威来源**：从 bundle 现役文件
-`<vault>\.dsh\bundles\vivado-preset\cordis.patch.yml` 原样取（它已自证与
+`作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml` 原样取（它已自证与
 shipped 逐字节一致，见结论 §2.2）；Lead 会把它落到 `templates/shipped-standard-22rows.yml`，
 队友**不要手抄**。
 
@@ -132,6 +132,6 @@ shipped 逐字节一致，见结论 §2.2）；Lead 会把它落到 `templates/s
 - 每步带证据；改动他人文件前先 `send_message` 给 Lead。
 - 备份惯例 `*.bak-<YYYYMMDD>`；**不要在 dist 里留备份文件**（会进包），备份放
   `<project_root>\.tmp\kit-recon-2026-10-24\backups\`。
-- 完成后把**证据报告**写到 `<vault>\.vivado-scratch\kit-2026-10-24\reports\<名字>.md`
+- 完成后把**证据报告**写到作者本机的临时目录（清单见当时的会话记录；不随仓库发布）
   （不写进 dist），并在 `send_message` 里给 Lead 一段 ≤15 行摘要（含命令原文与关键输出）。
 - 遇到阻塞（缺事实/契约不清）立刻问 Lead，不要猜着写。

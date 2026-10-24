@@ -11,7 +11,7 @@
 |---|---|
 | 上游容器 | `vivado-ai-extension-2026.9.1.vsix`（本机副本：`<vsix 所在目录>\vivado-ai-extension-2026.9.1.vsix`）`实测` |
 | 容器内路径 | `extension/resources/plugin-bundled/skills/<name>/` `实测` |
-| 上游仓库 | <https://github.com/Xilinx/ross-ai-assistant>（同源说法来自 `<vault>/.ross-recon/安装记录.md:5`；本机未联网核对仓库内容 ⇒ `按文档`） |
+| 上游仓库 | <https://github.com/Xilinx/ross-ai-assistant>（同源说法来自 作者本机的安装记录（未随仓库发布）；本机未联网核对仓库内容 ⇒ `按文档`） |
 | 许可 | **MIT** —— 见下方两条证据 |
 | 是否 pristine | **不是**。随包的是「vsix 原样 + 我们 7 个文件的改动」，见 §1.2 |
 
@@ -37,7 +37,7 @@
 
 ### 1.2 我们对 AMD 技能的改动：7 个文件（其余 633 个文件与上游**逐字节相同**）
 
-比对基准 = 上游原样副本 `<vault>/.ross-recon/official-skills/`，它自身与 vsix 内 640/640 文件逐字节一致（§4 命令 3）。
+比对基准 = 上游原样副本 作者本机的上游原样副本（未随仓库发布），它自身与 vsix 内 640/640 文件逐字节一致（§4 命令 3）。
 `diff -rq` 结果：6 个目录共 640 个文件，**只有下列 7 个不同**（§4 命令 4）。
 
 | # | 文件 | 改法 | 为什么 |
@@ -67,7 +67,7 @@
 | `amd-doc-search` | `SKILL.md` + `doc_search.py`（stdlib 客户端，检索 AMD hosted 文档服务） | **无** | frontmatter 未声明 `license`（保持原样，MANIFEST 里如实记 `null`） |
 | `vivado-workflow-discipline` | 单文件 `SKILL.md`：工作流顺序 + 判据纪律 + 版本分档 + 文档检索两条通路 | **无** | frontmatter `license: MIT` |
 
-- 两者**均不在**上游 vsix 里：vsix 的 50 个技能目录清单、以及 `.ross-recon/official-skills/` 的 8 个目录清单都没有它们（§4 命令 1/3）⇒ 归属「自研」有据，不是把 AMD 内容改个名。
+- 两者**均不在**上游 vsix 里：vsix 的 50 个技能目录清单、以及 `作者本机的上游原样副本（未随仓库发布）` 的 8 个目录清单都没有它们（§4 命令 1/3）⇒ 归属「自研」有据，不是把 AMD 内容改个名。
 - `amd-doc-search` 的 `doc_search.py` 会把 **query 外发到 AMD hosted 服务**（`实测`：服务端自报 `AMD Doc Search`）；`SKILL.md` 与 `vivado-workflow-discipline` 都写明「NDA/未公开项目不许用，或改走本地知识库」。
 - `vivado-workflow-discipline` 的纪律条目抽自本仓库 `PITFALLS.md` #69–#76（相关补充 #64/#67/#72/#73），是流程/判据文本，无第三方代码；文中标「实测」的版本事实属**转述**，故其 `baseline.status` 仍是 `unverified`。
 - 许可口径：自研两件的许可最终由 kit 顶层 `LICENSE`（ps-docs）决定。若顶层不是 MIT，只需改 `vivado-workflow-discipline/SKILL.md` 的 `license:` 一行并重跑生成器（`amd-doc-search` 无该字段，不需要改）。
@@ -93,25 +93,17 @@
 ## 4. 可复跑的证据命令
 
 ```powershell
-# 1) vsix 里的许可与技能清单
+# 1) vsix 里的许可原文（需要你本地的 vsix 文件；这是 AMD 的 MIT 证据）
 py -c "import zipfile;z=zipfile.ZipFile(r'<vsix 所在目录>\vivado-ai-extension-2026.9.1.vsix');print(z.read('extension/resources/plugin-bundled/LICENSE').decode()[:80])"
 
-# 2) dist\skills 与安装副本逐字节一致（同时是「复制没走样」的证明）
-py <vault>\.vivado-scratch\kit-2026-10-24\ps-skills\sync_skills.py
+# 2) 本仓库 skills/ 的完整性与一致性（本包唯一权威门禁；exit 0 = PASS）
+py tools\gen_skills_manifest.py --check
 
-# 3) 上游副本 vs vsix：640/640 文件逐字节一致（证明比对基准真的是上游）
-#    见 ps-skills.md §「vsix 对齐」；脚本片段用 zipfile + sha256 对比
-
-# 4) 我们改动的文件就这 7 个（其余 633 个与上游相同）
-cd <vault>; diff -rq .ross-recon\official-skills\hw-ila-debug .dsh\skills\hw-ila-debug
-#    … 6 个目录逐一跑；输出里只应出现 6 个 SKILL.md 与
-#    vivado-rtl-elaboration-analysis\parse_elab_messages.py（合计 7 个文件）
-
-# 5) 清单门禁（唯一判据，exit 0 = PASS）
-py D:\dsh-vivado\tools\gen_skills_manifest.py --check
-
-# 6) 重新生成清单（改动任何 SKILL.md 后必须跑；禁手改 MANIFEST.json）
-py D:\dsh-vivado\tools\gen_skills_manifest.py
+# 3) 「我们只改了 7 个文件」怎么自己核：把 vsix 里的上游副本解出来，逐个比对
+py -c "import zipfile;zipfile.ZipFile(r'<vsix 所在目录>\vivado-ai-extension-2026.9.1.vsix').extract('extension/resources/plugin-bundled/skills/hw-ila-debug/SKILL.md', r'<out>')"
+fc "<out>\extension\resources\plugin-bundled\skills\hw-ila-debug\SKILL.md" "skills\hw-ila-debug\SKILL.md"
+#    其余 5 个技能目录同理（都比 SKILL.md），外加 vivado-rtl-elaboration-analysis\parse_elab_messages.py，
+#    这些就是全部差异（合计 7 个文件）；其余文件与上游逐字节相同。
 ```
 
 > 本文件本身不是随包技能：它在 `skills/` 根，不是技能目录（无 `SKILL.md`），技能加载器不会把它当技能，生成器也不会把它当技能目录。

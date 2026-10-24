@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_by": "tools/gen_skills_manifest.py",
-  "source_hash": "67f33d79395753ca7d25eed5180dd3ee52e75530d17846219682ed425dea61a6",
+  "source_hash": "f32b320388d8fcaed644d18bbbd59e2de18361dd5ad888b7e10ad5db01c5e22f",
   "tool_catalog": {
     "available": false,
     "source": "not-embedded",
@@ -47,7 +47,7 @@
         "amd_doc": "2026.1",
         "tested_on": null,
         "status": "unverified",
-        "evidence": "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节覆盖度表未含 ILA 硬件链路，需真板+ILA core）"
+        "evidence": "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（作者本机的 vivado-mcp 核查记录（未随仓库发布） 1.6 节覆盖度表未含 ILA 硬件链路，需真板+ILA core）"
       }
     },
     {
@@ -68,7 +68,7 @@
         "amd_doc": "2026.1",
         "tested_on": null,
         "status": "unverified",
-        "evidence": "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节覆盖度表未含 VIO 硬件链路，需真板+VIO core）"
+        "evidence": "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（作者本机的 vivado-mcp 核查记录（未随仓库发布） 1.6 节覆盖度表未含 VIO 硬件链路，需真板+VIO core）"
       }
     },
     {
@@ -89,7 +89,7 @@
         "amd_doc": "2026.1",
         "tested_on": null,
         "status": "unverified",
-        "evidence": "SKILL.md:14 本机适配注记『Vivado 2023.1（官方基线 2026.1）』，frontmatter 无 compatibility；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节）"
+        "evidence": "SKILL.md:14 本机适配注记『Vivado 2023.1（官方基线 2026.1）』，frontmatter 无 compatibility；无 2023.1 实测记录（作者本机的 vivado-mcp 核查记录（未随仓库发布） 1.6 节）"
       }
     },
     {

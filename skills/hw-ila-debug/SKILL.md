@@ -10,7 +10,7 @@ baseline:
   amd_doc: "2026.1"
   tested_on: null
   status: unverified
-  evidence: "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节覆盖度表未含 ILA 硬件链路，需真板+ILA core）"
+  evidence: "SKILL.md:5 compatibility 声明 Requires Vivado 2026.1+；无 2023.1 实测记录（作者本机的 vivado-mcp 核查记录（未随仓库发布） 1.6 节覆盖度表未含 ILA 硬件链路，需真板+ILA core）"
 artifacts:
   - REPORT.md
   - report_data.json

@@ -1,7 +1,7 @@
 # doctor 检查项判据与修法（`docs\doctor-checks.md`）
 
 > 对应实现：`doctor.ps1` + `lib\doctor-helpers.ps1`
-> 读者：拿到本 kit 的同门 / 维护者 / 以后想加检查项的自己。
+> 读者：使用者 / 维护者 / 以后想加检查项的自己。
 > 本文只写**判据与证据**；"本机实测"一律标出机器与日期（2026-10-24，Windows，Vivado 2023.1，python 3.14.6，vivado-mcp 0.3.26），不当成官方保证。
 
 ---
@@ -145,7 +145,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 建议值始终给"同盘的 ASCII 目录"（本机 `D:/FPGA/.tmp` 已存在时优先建议它）。
 
 **为什么 `cwd` 只 WARN**：doctor 的当前目录只是"用户恰好在这里敲命令"，不是 kit 的配置。
-实测反例：在 vault（`<vault>`）里跑 doctor，若按 FAIL 处理会整项变红、
+实测反例：在 vault（作者本机笔记库）里跑 doctor，若按 FAIL 处理会整项变红、
 退出码 1，但 kit 本身完全正常——这是假阳性。所以 cwd 非 ASCII 只 WARN，
 修法是"cd 到 ASCII 目录再跑 install.ps1 / Vivado 活"，而不是去改 config。
 
@@ -214,7 +214,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 | FAIL（半装/坏装） | 依赖指向不存在的目录 / 依赖在但不在 `dsh.profile.bundles` / 在 `dsh.profile.bundles` 但无依赖 / staging 在但 profile 没接上 / profile 没有 `package.json` 但 staging 在 |
 | 修法 | `run install.ps1 -Profile <p>`（坏装时加一句"重装会重建 staging 链接"） |
 
-**为什么"裸 profile = WARN"**（Lead 2026-10-24 裁决）：doctor 会随包发给同门，他们很可能在**装之前**
+**为什么"裸 profile = WARN"**（Lead 2026-10-24 裁决）：doctor 会随包分发给使用者，他们很可能在**装之前**
 先跑一次看看环境；把"还没装"判成 FAIL 会让 `doctor.ps1` 一上手就红。语义上：
 WARN = "环境本身没坏，但这件事还没做"；FAIL 只留给**做了一半/坏掉**（那才是真的不能用）。
 验收时同理：裸 profile 必须 `exit 0`，装了 kit 的探针 profile 才看 13 项的 PASS 数。
@@ -280,7 +280,7 @@ WARN = "环境本身没坏，但这件事还没做"；FAIL 只留给**做了一�
 | 项 | 内容 |
 |---|---|
 | 测什么 | `<stage>\skills\<name>\SKILL.md` 存在，且文件里 `^name: xxx$` 的 xxx **等于目录名** |
-| 期望目录（8 个） | `amd-doc-search`、`hw-ila-debug`、`hw-vio-debug`、`vivado-revision-control`、`vivado-rtl-elaboration-analysis`、`vivado-rtl-lint`、`vivado-simulate-rtl`（AMD 官方 7 件）+ `vivado-workflow-discipline`（自研纪律） |
+| 期望目录（8 个） | `amd-doc-search`、`hw-ila-debug`、`hw-vio-debug`、`vivado-revision-control`、`vivado-rtl-elaboration-analysis`、`vivado-rtl-lint`、`vivado-simulate-rtl`（AMD 官方 **6** 件 + 自研 `amd-doc-search`）+ `vivado-workflow-discipline`（自研纪律） |
 | 命令 | 读文件 + 正则；无外部进程 |
 | PASS | 8/8 存在且 name 全对；detail `8/8 skills present ... every SKILL.md name: matches its directory` |
 | WARN | staging 目录不存在（还没装） |

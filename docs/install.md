@@ -1,6 +1,6 @@
 # dsh-vivado 安装 / 卸载 / 回退说明书
 
-> 面向对象：**同门（拿到 `dist/dsh-vivado/` 这个包的人）**。
+> 面向对象：**拿到本包的使用者（`git clone` 或下载 zip 后运行 `install.ps1`）**。
 > 一句话：**一条命令装，然后重启 DeepSeek Harness**；不生效就照「故障排查」逐条看。
 > 本文只讲 install.ps1 / uninstall.ps1 的行为与判据；环境体检见 `docs/doctor-checks.md`，包内容/来源见 `README.md` / `NOTICE`。
 
@@ -89,13 +89,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 `
 
 ```yaml
 part: xcku060-ffva1156-2-i          # 器件
-project_root: D:/FPGA               # 工程根（Vivado cwd，必须 ASCII）
+project_root: D:/fpga_project               # 工程根（Vivado cwd，必须 ASCII）
 vivado_version: 2023.1              # 决定 persona 版本分档（<2025.2 → 2023.1 档）
 vivado_path: D:/Xilinx/Vivado/2023.1/bin   # 含 vivado.bat 的 bin 目录
 python: <vivado-mcp>/venv/Scripts/python.exe
 vivado_mcp_site: <vivado-mcp>/site        # PYTHONPATH
-vivado_mcp_cwd: D:/FPGA                    # MCP server 的 cwd（必须 ASCII）
-temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
+vivado_mcp_cwd: D:/fpga_project                    # MCP server 的 cwd（必须 ASCII）
+temp_dir: D:/fpga_project/.tmp                     # TEMP/TMP（必须 ASCII）
 ```
 
 规则：`#` 之后是注释；空行忽略；未知键原样保留；值里 `\` 或 `/` 都行（渲染时统一成 `/`）。
@@ -128,7 +128,7 @@ temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
 安装器会：
 
 1. 读**运行时版本**：优先 `dsh.cmd --version` 的输出（正则取 `\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?`，本机 `0.2.1-rc.2`，约 0.35 s）；
-   拿不到才退到 `DeepSeek Harness.exe` 的 `VersionInfo.FileVersion`；**不用 `ProductVersion`**（它是 `0.2.1.0`，把 `-rc.2` 后缀丢了，写成它会写坏这张表）。
+   拿不到才退到 `DeepSeek Harness.exe` 的 `VersionInfo.FileVersion`；**优先不用 `ProductVersion`**（它是 `0.2.1.0`，把 `-rc.2` 后缀丢了，写成它会写坏这张表）——`FileVersion` 也拿不到时才作最后兜底，并在日志里 WARN 说明来源。
 2. 读 profile 实际装的 mcp-client 版本。
 3. 两者不同且表里没有该键 → **先备份** `compatibility.json.bak-<yyyyMMdd>`，再**只合并**这一个键（其余键、其余允许版本原样保留），写成 2 空格缩进的 JSON。
 

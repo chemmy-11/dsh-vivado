@@ -2,9 +2,9 @@
 #
 # 【不要手改本文件】它由 tools/render_patch.ps1 从 templates/preset.patch.yml.tmpl 渲染。
 # 模板由 tools/make_template.py 生成：22 条 shipped 插件行原样取自已实证的现役 bundle
-#   <vault>\.dsh\bundles\vivado-preset\cordis.patch.yml（作者本机路径，不属于本分发件）
+#   作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml（作者本机路径，不属于本分发件）
 #   （该文件已自证与 shipped dsh-web-app/presets/standard.patch.yml 逐字节一致，
-#     见 结论_cross_Vivado环境DSH规范化_2026-10-24.md §2.2）
+#     见 作者本机的规范化取证记录（未随仓库发布） §2.2）
 # 只做两处允许的改动：persona 换成本 kit 的版本分档片段、skill-filesystem 加 customSkillDirs；
 # 末尾追加 mcp-vivado 行（硬件相关值参数化）。
 #
@@ -47,7 +47,7 @@
             name: '@deepseek-ai/dsh-skill-filesystem'
             config:
               # rank 300「custom」根：kit 随包技能。includeDefaultRoots 保持默认 true，
-              # 同门自己的项目/用户技能根照旧生效，不被本包挤掉。
+              # 使用者自己的项目/用户技能根照旧生效，不被本包挤掉。
               customSkillDirs:
                 - '{{SKILLS_DIR}}'
           - id: tool-skill

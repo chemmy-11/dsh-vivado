@@ -8,7 +8,7 @@ baseline:
   amd_doc: "2026.1"
   tested_on: null
   status: unverified
-  evidence: "SKILL.md:14 本机适配注记『Vivado 2023.1（官方基线 2026.1）』，frontmatter 无 compatibility；无 2023.1 实测记录（结论_cross_vivado-mcp健康与使用核查_2026-10-24.md 1.6 节）"
+  evidence: "SKILL.md:14 本机适配注记『Vivado 2023.1（官方基线 2026.1）』，frontmatter 无 compatibility；无 2023.1 实测记录（作者本机的 vivado-mcp 核查记录（未随仓库发布） 1.6 节）"
 artifacts:
   - build.tcl
   - run_pipeline.tcl

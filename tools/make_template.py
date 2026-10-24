@@ -3,8 +3,8 @@ r"""make_template.py — 从已实证的现役预设 bundle 原样抽取 22 条 
 生成 dsh-vivado 的**唯一**模板 `templates/preset.patch.yml.tmpl`（带 {{PLACEHOLDER}}）。
 
 为什么这样生成（不是手抄）：
-  现役 `<vault>\.dsh\bundles\vivado-preset\cordis.patch.yml` 的 22 行是上一轮
-  (`结论_cross_Vivado环境DSH规范化_2026-10-24.md` §2.2) 用 asar 解析器从 shipped
+  现役 `作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml` 的 22 行是上一轮
+  (作者本机的规范化取证记录（未随仓库发布）§2.2) 用 asar 解析器从 shipped
   `dsh-web-app/presets/standard.patch.yml` 原样导出、并断言逐字节一致的产物。
   本脚本**只做两处允许的改动**，其余字符逐字节保留：
     ① 把 persona 行那一块替换成 {{PERSONA_BLOCK}}（由 templates/persona/<tier>.frag.yml 提供）；
@@ -32,7 +32,7 @@ KITROOT = HERE.parent
 TPL = KITROOT / "templates"
 # The provenance source is a project-local bundle patch on the *authoring* machine, so it is a
 # required argument instead of a constant: a hardcoded home path must never ship inside the kit.
-# Recorded fact (for the maintainer): it was <vault>\.dsh\bundles\vivado-preset\cordis.patch.yml
+# Recorded fact (for the maintainer): it was 作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml
 DEFAULT_SRC = None
 # Any "<drive>:\Users\<name>\" home path: catches a personal path without hardcoding this
 # author's account name in the shipped tool.
@@ -129,7 +129,7 @@ def build(src: Path) -> dict[str, str]:
         sf
         + "            config:\n"
         + "              # rank 300「custom」根：kit 随包技能。includeDefaultRoots 保持默认 true，\n"
-        + "              # 同门自己的项目/用户技能根照旧生效，不被本包挤掉。\n"
+        + "              # 使用者自己的项目/用户技能根照旧生效，不被本包挤掉。\n"
         + "              customSkillDirs:\n"
         + "                - '{{SKILLS_DIR}}'\n"
     )
@@ -183,9 +183,9 @@ def build(src: Path) -> dict[str, str]:
 #
 # 【不要手改本文件】它由 tools/render_patch.ps1 从 templates/preset.patch.yml.tmpl 渲染。
 # 模板由 tools/make_template.py 生成：22 条 shipped 插件行原样取自已实证的现役 bundle
-#   <vault>\\.dsh\\bundles\\vivado-preset\\cordis.patch.yml（作者本机路径，不属于本分发件）
+#   作者本机笔记库\\.dsh\\bundles\\vivado-preset\\cordis.patch.yml（作者本机路径，不属于本分发件）
 #   （该文件已自证与 shipped dsh-web-app/presets/standard.patch.yml 逐字节一致，
-#     见 结论_cross_Vivado环境DSH规范化_2026-10-24.md §2.2）
+#     见 作者本机的规范化取证记录（未随仓库发布） §2.2）
 # 只做两处允许的改动：persona 换成本 kit 的版本分档片段、skill-filesystem 加 customSkillDirs；
 # 末尾追加 mcp-vivado 行（硬件相关值参数化）。
 #
@@ -216,9 +216,9 @@ AUDIT_HEADER = """# shipped-standard-22rows.yml -- provenance audit copy (NOT an
 # This file exists to prove that the 22 plugin rows inside the rendered patch are the shipped
 # `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` content, not hand-copied text.
 # Source: the previously verified project-local bundle patch
-#   <vault>\\.dsh\\bundles\\vivado-preset\\cordis.patch.yml
+#   作者本机笔记库\\.dsh\\bundles\\vivado-preset\\cordis.patch.yml
 #   (proven byte-identical to the shipped preset in
-#    结论_cross_Vivado环境DSH规范化_2026-10-24.md §2.2)
+#    作者本机的规范化取证记录（未随仓库发布） §2.2)
 # Rows 2-22 below are byte-identical to that source (line endings normalized to LF).
 # The persona row is intentionally replaced by a comment: the pre-kit persona was OUR text and
 # carried the author's absolute paths, so it must not travel inside a distributed kit.
