@@ -85,6 +85,27 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 `
 
 ---
 
+## 1.5 更新 / 升级已装的版本
+
+装过一次之后要更新到新版本，**先退出 DeepSeek Harness 桌面版**：宿主运行期间，官方 CLI 会拒绝管理桌面 profile
+（实测报错原文：`error: profile "desktop" is managed exclusively by the Electron application`），这是有意保护，
+不是坏了。
+
+```powershell
+# ① 完全退出 DeepSeek Harness（托盘也退出），然后：
+git -C D:\dsh-vivado pull --ff-only            # 或重新下载 zip 覆盖
+powershell -ExecutionPolicy Bypass -File D:\dsh-vivado\install.ps1   # 幂等：重跑即刷新 staging + 重渲染
+# ② 再启动宿主
+```
+
+- 安装器是**幂等**的：重复跑不会产生重复依赖/重复条目，只会把 staging 内容与渲染产物刷新到当前版本。
+- 改过 `config.yml` 后同样只需重跑安装器（或 `-RenderOnly` 刷新 staging）再重启。
+- **不想退出宿主**时的替代路径：在会话里让 agent 用 `plugin_manager`（`install_bundle` / `remove_bundle`）更新；
+  这在宿主运行中也能生效，但**不刷新 staging 的文档/脚本副本**，所以仍建议按上面的流程做一次干净更新。
+- 从**旧的手工 bundle**（例如把预设目录直接挂进 profile 的做法）迁移过来时：两个 bundle 会声明同一个
+  preset 行 id（`preset-vivado`），**不要同时装**。正确顺序是先移除旧的（`dsh plugin --profile <p> remove <旧包名>`，
+  或会话里 `plugin_manager` 的 `remove_bundle`），再装本包；装完 `--dump-config` 里 `preset-vivado` 应当只出现一次。
+
 ## 2. `config.yml`（扁平 `key: value`，不需要 YAML 模块）
 
 ```yaml

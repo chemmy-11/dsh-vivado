@@ -70,6 +70,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf
 and the Electron host has no hot reload — this is a precondition, not a suggestion. Then create a new
 session and switch the preset to **`Vivado`**.
 
+> **Updating an existing install**: quit the desktop app completely, then `git pull` and re-run
+> `install.ps1` (idempotent). While the host runs, the official CLI refuses to manage the desktop
+> profile on purpose. See [`docs/install.md` §1.5](docs/install.md).
 > Installing into another profile / `DSH_HOME`: `.\install.ps1 -Profile work -DshHome D:\dsh-home`.
 > All flags (`-Config`, `-Mode cli|manual`, `-StageDir`, `-RenderOnly`, `-SkipCompatibility`, …) and the
 > nine-step flow: [`docs/install.md`](docs/install.md) (Chinese).

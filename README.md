@@ -63,6 +63,8 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf
 **装完必须重启 DeepSeek Harness。** 配置在宿主启动时读取，Electron 宿主下没有热更新——这不是建议，是前提。
 重启后新建会话，把预设切到 **`Vivado`**。
 
+> **更新到新版本**：先完全退出桌面版，再 `git pull` + 重跑 `install.ps1`（幂等）；宿主运行期间官方 CLI 会拒绝管理桌面 profile，
+> 这是有意保护。详见 [`docs/install.md` §1.5](docs/install.md)。
 > 装到别的 profile / 别的 `DSH_HOME`：`.\install.ps1 -Profile work -DshHome D:\dsh-home`。
 > 全部参数（`-Config` / `-Mode cli|manual` / `-StageDir` / `-RenderOnly` / `-SkipCompatibility` …）与九步流程：
 > [`docs/install.md`](docs/install.md)。
