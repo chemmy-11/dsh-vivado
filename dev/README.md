@@ -8,6 +8,8 @@
 > `<DSH_HOME>` = DSH 配置根（默认 `%USERPROFILE%\.dsh`）；`<DSH 安装根>` = 含 `DeepSeek Harness.exe`
 > 的目录（其下有 `resources\runtime\cli\bin\dsh.cmd`）；`<profile>` = profile 名（默认 `desktop`）。
 
+> **路径存在性（2026-10-24 起）**：`install.ps1` / `doctor.ps1` 会要求 `project_root` / `vivado_mcp_cwd` / `temp_dir` 指向真实存在的目录（缺 `temp_dir` 时安装器自动创建）。本套件的夹具已自建 `<work-dir>/project`，所以直接跑即可；你自己手写 config 时别用 `config.example.yml` 里的占位路径。
+
 ## 0. 为什么需要它
 
 仓库里的 `--check` 门禁（`tools/make_template.py`、`tools/gen_skills_manifest.py`）只能证明

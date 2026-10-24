@@ -222,6 +222,22 @@ def base_config_text() -> str:
     return CONFIG_SRC.read_text(encoding="utf-8")
 
 
+def project_config_text() -> str:
+    """Example config with its three path keys pointed at a real scratch project.
+
+    install.ps1 and doctor.ps1 now refuse a project_root / vivado_mcp_cwd / temp_dir that does
+    not exist (a missing cwd/TEMP makes the MCP server fail to spawn silently), so the harness
+    materialises its own project directory instead of using the example's placeholder path.
+    """
+    root = WORK / "project"
+    (root / ".tmp").mkdir(parents=True, exist_ok=True)
+    t = base_config_text()
+    t = cfg_set(t, "project_root", as_path(root))
+    t = cfg_set(t, "vivado_mcp_cwd", as_path(root))
+    t = cfg_set(t, "temp_dir", as_path(root / ".tmp"))
+    return t
+
+
 def as_path(value: str) -> str:
     """Render a scratch path the way the kit's config files spell paths (forward slashes)."""
     return str(value).replace("\\", "/")
@@ -407,7 +423,7 @@ def group_install() -> bool:
     print("\n== install (cli mode) + composition ==")
     make_home()
     prof = HOME / "profiles" / PROFILE
-    cfg = write_cfg("accept-config.yml", base_config_text())
+    cfg = write_cfg("accept-config.yml", project_config_text())
     env = {"DSH_HOME": str(HOME)}
     before = {n: sha(prof / n) for n in ("package.json",) if (prof / n).is_file()}
     user_skills = live_dsh_home() / "skills"
@@ -511,7 +527,7 @@ def group_uninstall() -> bool:
 def group_manual() -> bool:
     print("\n== manual mode (no pnpm) ==")
     make_home()
-    cfg = write_cfg("accept-config.yml", base_config_text())
+    cfg = write_cfg("accept-config.yml", project_config_text())
     rc, txt = ps(KIT / "install.ps1", *_install_args(cfg, "-Mode", "manual", part=PART),
                  env_extra={"DSH_HOME": str(HOME)})
     ok = record("manual install exit 0", rc == 0, "" if rc == 0 else tail(txt, 14))
@@ -551,7 +567,7 @@ def group_stranger() -> bool:
     # Regression guard for the "second -Config is ignored when staging already exists" bug (P0):
     # re-install with the original config over the existing staging dir and require the rendered
     # persona AND the staging config to switch back.
-    original = write_cfg("accept-config.yml", base_config_text())
+    original = write_cfg("accept-config.yml", project_config_text())
     rc2, out2 = ps(KIT / "install.ps1", *_install_args(original, part=PART), env_extra=env)
     stage_patch = HOME / "bundles" / KIT_PACKAGE / "cordis.patch.yml"
     stage_text = stage_patch.read_text(encoding="utf-8") if stage_patch.is_file() else ""
@@ -581,10 +597,10 @@ def group_doctor() -> bool:
     installed = (HOME / "bundles" / KIT_PACKAGE / "cordis.patch.yml").is_file()
     if not installed:
         make_home()
-        cfg = write_cfg("accept-config.yml", base_config_text())
+        cfg = write_cfg("accept-config.yml", project_config_text())
         ps(KIT / "install.ps1", *_install_args(cfg, part=PART), env_extra={"DSH_HOME": str(HOME)})
     env = {"DSH_HOME": str(HOME)}
-    base = base_config_text()
+    base = project_config_text()
     cfg = cfg_parse(base)
     healthy = write_cfg("accept-config.yml", base)
     doctor = ["-DshHome", str(HOME), "-Profile", PROFILE, "-NonInteractive",

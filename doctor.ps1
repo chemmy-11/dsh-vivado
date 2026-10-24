@@ -673,13 +673,32 @@ function Test-CheckAsciiPaths {
         return New-Result 'ascii-paths' 'ASCII paths' 'WARN' ($detail + ' (only the current shell directory, not a kit setting)') `
             ('cd to an ASCII directory (e.g. ' + $suggestion + ') before running install.ps1 or Vivado work; the kit config itself is fine')
     }
+    # Existence pass (learned the hard way, 2026-10-24): the MCP server's cwd and TEMP/TMP are
+    # taken from project_root / vivado_mcp_cwd / temp_dir. A path that does not exist makes the
+    # stdio server fail to spawn, and the client keeps that silent -> the session has ZERO
+    # mcp__vivado__* tools while every other check passes. Name it here.
+    $missing = New-Object System.Collections.Generic.List[string]
+    foreach ($it in $items) {
+        if (-not $it.Config) { continue }
+        if (@('project_root', 'vivado_mcp_cwd', 'temp_dir') -notcontains $it.Key) { continue }
+        $raw = [string]$it.Value
+        if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+        $win = $raw -replace '/', '\'
+        if (-not (Test-Path -LiteralPath $win)) { $missing.Add($it.Key + '=' + $raw) }
+    }
+    if ($missing.Count -gt 0) {
+        return New-Result 'ascii-paths' 'ASCII paths' 'FAIL' `
+            ('path does not exist: ' + ($missing -join '; ') + ' - the MCP server cwd and TEMP/TMP come from these keys, and a missing path makes the server fail to start silently (session then has 0 mcp__vivado__* tools)') `
+            ('create the directory or point the key at an existing pure-ASCII directory, then re-run install.ps1 (it re-renders) and restart the host')
+    }
+
     if ($empty.Count -gt 0) {
         return New-Result 'ascii-paths' 'ASCII paths' 'WARN' `
             ('no non-ASCII path, but empty config keys: ' + ($empty -join ', ')) `
             'fill these keys in config.yml (they become the MCP cwd/TEMP and the project root) and re-run install.ps1'
     }
     return New-Result 'ascii-paths' 'ASCII paths' 'PASS' `
-        'cwd, TEMP, TMP, project_root, vivado_mcp_cwd, temp_dir are pure ASCII' ''
+        'cwd, TEMP, TMP, project_root, vivado_mcp_cwd, temp_dir are pure ASCII and exist' ''
 }
 
 # ---------------------------------------------------------------------------

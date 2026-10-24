@@ -35,12 +35,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1
 ```
 判据是"**+32**"，不是工具总数：总数随 DSH 版本变，别拿旧文档的绝对数当标准（doctor 第 7 项就是按 32 判的）。另外确认这个会话用的确实是 `Vivado` 预设——`standard` 会话**没有**这些工具，这是设计。
 
-### 2.11 热更新过 bundle 之后，新会话一个 `mcp__vivado__*` 都没有（但 doctor 第 7 项仍是 32）
+### 2.11 预设、技能都正常，但一个 `mcp__vivado__*` 工具都没有（`doctor` 第 7 项却是 32）
 
-- 现象：`Vivado` 预设还在、persona 与 8 个技能都正常，但工具数是 **0**（不是 32）；`doctor.ps1` 第 6/7/12 项却全 PASS；`py <vivado-mcp>\mcp_ctl.py list` 也正常给 32 行。
-- 原因：MCP 客户端行在**宿主内热重载**（`install_bundle` / `remove_bundle` / `set_bundle` 开关 / 多次重写 staging）之后没有重新拉起 stdio 子进程。判据：`Get-Process python*` 里**看不到** `-m vivado_mcp` 进程（或只剩旧的、启动时间早于本次改动），而新会话工具数为 0。
-- 修法：**重启宿主**。重启后再看两处：`doctor.ps1`（应 12 PASS / 1 WARN）+ 新 `Vivado` 会话问一句"列出你工具清单里所有 `mcp__vivado__*`"（应为 32）。
-- 为什么文档一直强调"改 bundle 内容就重启"：静态行能热切，**子进程不行**；把它当铁律可以省掉一整类"装了半天没工具"的误判。
+- 现象：`Vivado` 预设存在、persona 与 8 个技能都正常，工具数却是 **0**；`doctor.ps1` 第 6/7/12 项全 PASS；
+  `py <vivado-mcp>\mcp_ctl.py list` 也正常给 32 行 —— 看起来"什么都好"，就是没有工具。
+- 最常见原因（2026-10-24 亲历）：**MCP 行的 `cwd` / `TEMP` / `TMP` 指向一个不存在的目录**。
+  这三项来自 `config.yml` 的 `project_root` / `vivado_mcp_cwd` / `temp_dir`；stdio 子进程在不存在的 `cwd`
+  下根本起不来，而本行是 `failOnStartupError: false` ⇒ **失败静默**，会话就只剩"没有工具"这一个症状。
+  典型触发：把 `config.example.yml` 里的示例路径（如 `D:/fpga_project`）原样拿去渲染。
+- 判据：`doctor.ps1` 第 5 项（`ascii-paths`）会直接点名 `path does not exist: project_root=...`；
+  `install.ps1` 现在也在渲染前拦下（`temp_dir` 缺失会自动创建，另两个直接 FAIL 并给修法）。
+  手工复核：`Get-Content <staging>\cordis.patch.yml | Select-String "cwd:|TEMP:"`，再用 `Test-Path` 逐个验。
+- 修法：把那三个键指到**真实存在**的纯 ASCII 目录（`temp_dir` 可以不存在，安装器会建）→ 重跑 `install.ps1`
+  （它会重新渲染；重装时默认复用上一次写进 staging 的 `config.yml`，不会再退回示例值）→ 重启宿主。
+- 次因：用会话内 `plugin_manager` 反复热装/热卸之后，MCP 行有时不会重新拉起子进程（判据：`Get-Process python*`
+  里没有新的 `-m vivado_mcp`）——这种情况重启宿主即可，且**不影响**上面的路径判据。
 
 ### 2.3 `start_session` 失败
 

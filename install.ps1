@@ -167,16 +167,23 @@ Write-KitLog INFO '=============================================================
 # ---------------------------------------------------------------------------
 
 Write-KitLog STEP '1/9 resolve config'
-$configPath = Resolve-KitConfigPath -KitRoot $script:KitRoot -Config $Config
-$sourceCfg = Read-KitConfig -Path $configPath
-Write-KitLog INFO ('config source: {0}' -f $configPath)
-
 $dshHomePath = Get-DshHome -Override $DshHome
 $profileDir = Get-DshProfileDir -DshHome $dshHomePath -Profile $Profile
 $profilePkg = Join-Path $profileDir 'package.json'
 if ([string]::IsNullOrWhiteSpace($StageDir)) {
     $StageDir = Join-Path (Join-Path $dshHomePath 'bundles') $script:StageLeaf
 }
+# Re-running the installer to UPDATE an existing install must not fall back to the example
+# values (those are placeholders such as D:/fpga_project): prefer the effective config the
+# previous run wrote into the staging directory.
+$stagedConfig = Join-Path $StageDir 'config.yml'
+if ([string]::IsNullOrWhiteSpace($Config) -and -not (Test-Path -LiteralPath (Join-Path $script:KitRoot 'config.yml')) -and (Test-Path -LiteralPath $stagedConfig)) {
+    $Config = $stagedConfig
+    Write-KitLog INFO ('re-using the effective config from the previous install: {0}' -f $stagedConfig)
+}
+$configPath = Resolve-KitConfigPath -KitRoot $script:KitRoot -Config $Config
+$sourceCfg = Read-KitConfig -Path $configPath
+Write-KitLog INFO ('config source: {0}' -f $configPath)
 Write-KitLog INFO ('DSH_HOME   : {0}' -f $dshHomePath)
 Write-KitLog INFO ('profile dir: {0}' -f $profileDir)
 Write-KitLog INFO ('staging dir: {0}' -f $StageDir)
@@ -331,6 +338,26 @@ foreach ($pair in @(@('staging dir', $StageDir), @('skills dir', (Join-Path $Sta
         Write-KitLog FAIL 'fix: keep every path ASCII (pass -StageDir D:/dsh-bundles/dsh-vivado, set temp_dir/project_root to ASCII paths)'
         exit 1
     }
+}
+
+# Existence guard (learned the hard way, 2026-10-24): the MCP row's `cwd` and `TEMP/TMP` are
+# taken from project_root / vivado_mcp_cwd / temp_dir. A path that does not exist makes the
+# stdio server fail to spawn, and `failOnStartupError: false` keeps that silent -> the session
+# simply has zero `mcp__vivado__*` tools. Refuse up front (temp_dir is ours to create).
+foreach ($pair in @(@('project_root', $effective['project_root']), @('vivado_mcp_cwd', $effective['vivado_mcp_cwd']), @('temp_dir', $effective['temp_dir']))) {
+    $key = $pair[0]
+    $val = ([string]$pair[1]) -replace '/', '\'
+    if ([string]::IsNullOrWhiteSpace($val)) { continue }
+    if (Test-Path -LiteralPath $val) { continue }
+    if ($key -eq 'temp_dir') {
+        New-Item -ItemType Directory -Path $val -Force | Out-Null
+        Write-KitLog WARN ('created missing temp_dir: {0}' -f $pair[1])
+        continue
+    }
+    Write-KitLog FAIL ('{0} does not exist: {1}' -f $key, $pair[1])
+    Write-KitLog FAIL ('fix: set {0} to an existing pure-ASCII directory in config.yml (copy config.example.yml to config.yml if you have none), then re-run' -f $key)
+    Write-KitLog FAIL 'why: these paths become the MCP server cwd and TEMP/TMP; a missing path makes the server fail silently and the session shows no mcp__vivado__* tools'
+    exit 1
 }
 
 $stageConfig = Join-Path $StageDir 'config.yml'

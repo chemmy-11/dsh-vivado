@@ -1,4 +1,7 @@
 # dsh-vivado — environment config (flat `key: value`, no YAML module needed).
+# NOTE: project_root / vivado_mcp_cwd / temp_dir must be REAL, EXISTING, ASCII directories:
+# they become the MCP server's cwd and TEMP/TMP, and a missing path makes the server fail
+# silently (the session then shows no mcp__vivado__* tools at all). install.ps1 refuses it.
 # install.ps1 rewrites this file with the values it actually detected/used.
 # doctor.ps1 re-reads it. Keep every path ASCII: Vivado's Tcl layer breaks on non-ASCII paths.
 

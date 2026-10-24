@@ -132,11 +132,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 
 | 项 | 内容 |
 |---|---|
-| 测什么 | 六个值逐字符 `< 0x80`：`cwd`、`TEMP`、`TMP`、`project_root`、`vivado_mcp_cwd`、`temp_dir` |
+| 测什么 | ① 六个值逐字符 `< 0x80`；② 三个 config 键指向的目录存在：`cwd`、`TEMP`、`TMP`、`project_root`、`vivado_mcp_cwd`、`temp_dir` |
 | 命令 | 无外部进程；`Test-AsciiPath`（`lib\common.ps1`） |
 | PASS | 六个都非空且纯 ASCII |
 | WARN | ① 只有 **`cwd`** 含非 ASCII（doctor 恰好被从中文目录启动——那是 shell 位置，不是 kit 配置）；② 无非 ASCII 但 config 键为空（`project_root`/`vivado_mcp_cwd`/`temp_dir`） |
 | FAIL | `TEMP`/`TMP` 或三个 config 键（`project_root`/`vivado_mcp_cwd`/`temp_dir`）含非 ASCII；detail 点名**第一个**冒犯的键（其余并列列出） |
+| FAIL（2026-10-24 补充） | 三个 config 键指向的目录**不存在**：`path does not exist: <key>=<value>`。这三项会成为 MCP 子进程的 cwd 与 TEMP/TMP，路径不存在时子进程起不来，而 `failOnStartupError: false` 让失败静默 ⇒ 会话工具数为 0 而其它检查全绿（真事故：`config.example.yml` 的示例路径 `D:/fpga_project` 被原样拿去渲染）。修法 = 建目录或改键 → 重跑 `install.ps1`（它现在也会在渲染前拦住）→ 重启 |
 | 修法 | `point \`temp_dir\` at a pure-ASCII directory on the same drive (e.g. D:/FPGA/.tmp) and re-run install.ps1; for TEMP/TMP set $env:TEMP/$env:TMP before running Vivado` |
 
 **为什么 config/TEMP/TMP 是 FAIL**：Vivado 的 Tcl 层按 GBK 解码路径，中文目录会在 `open_project` /
