@@ -186,6 +186,19 @@ Remove-Item -Recurse -Force $env:USERPROFILE\.dsh\bundles\dsh-vivado
 
 每个格子的证据、命令与「新机器重探 checklist」：**`docs\version-matrix.md`**。
 
+## 8.5 许可与来源（谁的东西、什么许可、我们履行的义务）
+
+| 内容 | 许可 | 我们要做的 | 细节 |
+|---|---|---|---|
+| AMD 官方 6 件技能（`skills/` 里那 6 个目录） | **MIT**（© 2026 AMD） | 保留版权+许可声明、标明我们的改动 | `NOTICE` §1 + 附录 A；`docs/licensing.md` §1 |
+| 取自 DeepSeek Harness 的 22 条预设插件行 | **MIT**（© 2026 DeepSeek） | 保留版权+许可声明 | `NOTICE` §3.1 + 附录 C；`docs/licensing.md` §2 |
+| vivado-mcp 的 4 个补丁 | 改的是 **Apache-2.0** 代码 | 随附许可证全文、标明「已修改」 | `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`、README §3.5 |
+| 本仓库自己的代码/文档 | 见 `LICENSE`（同门内部使用，public 版待审查） | 第三方条款优先于本文件 | `LICENSE` §3/§5 |
+
+- **不随包分发**：Vivado 本体与许可证、AMD entitlement、任何密钥、`vivado-mcp` 源码、DSH 运行时/CLI/UI 代码。
+- 与 AMD / Xilinx / DeepSeek **无隶属或背书关系**；名称仅为指称（`NOTICE` §3.2）。
+- 完整审查（含外层专有协议 §4.1 的边界引文、复核命令）：[`docs/licensing.md`](docs/licensing.md)。
+
 ## 9. 排错（按坑号索引，全部是本仓库踩过的真事）
 
 | 症状 | 根因 / 修法 | 坑号 |

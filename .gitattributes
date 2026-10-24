@@ -12,6 +12,11 @@
 *.json   text eol=lf
 *.patch  text eol=lf
 *.svg    text eol=lf
+*.txt    text eol=lf
+.gitattributes  text eol=lf
+.gitignore      text eol=lf
+NOTICE          text eol=lf
+LICENSE         text eol=lf
 
 # `skills/**` is VENDORED content: the six AMD skills are copied byte-for-byte from
 # vivado-ai-extension (MIT) so the NOTICE's "unmodified apart from 7 listed files" claim stays

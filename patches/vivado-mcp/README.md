@@ -84,6 +84,25 @@ py -c "import base64,hashlib,os;root=r'D:/vivado-mcp/site';mod=[];[mod.append(p.
 - `get_cdc_report(..., max_details: int = 0)`（`:23`）：由 `100` → **`0` = 全量**（工具自身界仍是 0..500），并在 docstring 写明理由（`:32-34`），修 `D:\FPGA\PITFALLS.md:86`（坑 #76 同族：CDC 违例同样是逐条可修的细节）。
 - 现场路径仍是 `report_cdc -details -return_string`（`:53`）——**这一条在 2023.1 上尚未实测**（`结论_cross_Vivado环境DSH规范化_2026-10-24.md` §5 第 4 项把 `get_cdc_report` 列为未触达工具），见 `..\..\docs\version-matrix.md`。
 
+## 3.5 许可合规（Apache-2.0，第一次用请读这 20 行）
+
+`vivado-mcp` 是 **Apache-2.0**（`vivado_mcp-0.3.26.dist-info/METADATA` 的 `License-Expression: Apache-2.0`）。
+本目录随包提供**许可证全文** `LICENSE-APACHE-2.0.txt`（10 774 B，取自
+`vivado_mcp-0.3.26.dist-info/licenses/LICENSE`，sha256 `77b29df2…459e9c`）。
+
+| Apache-2.0 条款 | 我们怎么履行 |
+|---|---|
+| §4(a) 给接收者一份许可证 | 就是同目录这份 `LICENSE-APACHE-2.0.txt`；`NOTICE` §2.1 也指向它 |
+| §4(b) 被修改的文件要带「已修改」显著提示 | 本 kit 只发补丁、不发源码；**打了补丁的人**才是被改文件的产生者。建议在改过的 4 个文件头部加一行（任选，二选一即可）：<br>`# Modified by dsh-vivado patches (patches/vivado-mcp/0001..0004); see NOTICE §2.1.`<br>或保留本目录的 `README.md` 与之一起分发 |
+| §4(c) 保留版权/专利/商标/归属声明 | 补丁是 `-u` 上下文差分，原文件的版权头与文件头都保留在上下文里，未做剥离 |
+| §4(d) 若上游有 NOTICE 则转发 | 2026-10-24 核对上游仓库根目录：**没有** `NOTICE`/`NOTICE.md`（只有 `LICENSE`），故无内容需转发 |
+| §6 无商标授权 | 本 kit 不使用上游商标/logo；`AMD`/`Xilinx`/`Vivado` 等仅为指称（见 `NOTICE` §3.2） |
+| 不做私有分支 | 见 §6：优先上游 PR；上游合并或自行修掉后，本 kit 删除对应补丁并登记「已上游化」 |
+
+> 一句话：**补丁本身是我们写的，但它改的是别人的代码**，所以许可证全文必须跟着补丁走；上面两条最容易漏（§4(b) 的修改标记、删除补丁后的登记）。
+
+---
+
 ## 4. 怎么应用（在 `site` 目录下，`-p1`）
 
 ```powershell

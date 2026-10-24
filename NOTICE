@@ -79,6 +79,12 @@
 
 - **不重分发修改后的源码**：kit 里只有补丁，没有 `vivado-mcp` 的任何 `.py`；同门用 `pip install vivado-mcp==0.3.26` 自装后**显式**应用补丁。
 - **不做私有 fork**：优先把 4 条改动**上游 PR**（每一条都能独立成 PR）。按 Apache-2.0 §4(b)，被修改的文件需带「已被修改」的显著提示——把改动留在使用者显式应用的补丁里，比静默发一份改过的源码更符合该义务，也让上游可审；若上游接受或自行修掉，本 kit 删除对应补丁并在此登记「已上游化」。
+- **Apache-2.0 §4(a) 已履行**：随包提供许可证全文 `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`
+  （10 774 B，取自 `vivado_mcp-0.3.26.dist-info/licenses/LICENSE`，sha256 `77b29df2…459e9c`）。
+- **§4(d) 无需履行**：2026-10-24 用 GitHub Contents API 核对上游仓库根目录，**没有** `NOTICE` / `NOTICE.md` 文件
+  （只有 `LICENSE`）；因此没有需要我们转发的 NOTICE 内容。
+- **§4(b)（改过的文件要标「已修改」）**：本 kit 分发的是**补丁**而不是改后的源码，落到谁机器上谁才产生「被改的文件」。
+  `patches/vivado-mcp/README.md` 给了一行现成的标记注释，应用补丁后建议加在被改文件头部。
 - 补丁的用途、应用/验证方法、升级重生成流程：见 `patches/vivado-mcp/README.md`。
 - `vivado-mcp` 的**依赖**（`mcp` 2.x、`pydantic`、`httpx2` 等）由 `pip` 安装，**不在本 kit 内**；它们的许可由用户与各上游项目之间成立，与本 kit 无关。
 
@@ -100,15 +106,43 @@
 | `skills/vivado-workflow-discipline/**` | 自研技能：Vivado 工作流纪律（判据文本） | 否 |
 | `skills/<AMD 6 件>/**` | AMD 官方技能 | **是，MIT，见 §1** |
 
-### 3.1 DSH 自带内容（第 4 类：既不是 AMD 的，也不是我们原创的）
+### 3.1 取自 DeepSeek Harness 的配置数据（MIT —— **不是**「无主内容」）
 
-`templates/preset.patch.yml.tmpl`（及由其渲染的 `cordis.patch.yml`）里的 **22 条 shipped 插件行**（`persona` … `tool-plugin-market`），是从**运行中的 DeepSeek Harness 安装包自带**的 `dsh-web-app/presets/standard.patch.yml` **原样提取**的（做法与逐字节断言见 `结论_cross_Vivado环境DSH规范化_2026-10-24.md` §2.2）。它们属于 DSH 宿主应用的**配置数据**：
+`templates/preset.patch.yml.tmpl`（及由其渲染的 `cordis.patch.yml`）里的 **22 条 shipped 插件行**
+（`persona` … `tool-plugin-market`），是从**运行中的 DeepSeek Harness 安装包自带**的
+`dsh-web-app/presets/standard.patch.yml` **原样提取**的（做法与逐字节断言见
+`结论_cross_Vivado环境DSH规范化_2026-10-24.md` §2.2）。审计件 `templates/shipped-standard-22rows.yml`
+存的是其中 21 行逐字节内容（persona 行是我们自己的文本，不随包分发）。
 
-- 我们不声称对它们拥有著作权，也不把它们当「我们的代码」；
-- 它们**不是源码分发**：只出现在「为同门生成同版本 DSH 预设」所需的 patch 清单里（与本机 DSH 0.2.1-rc.2 的 shipped 预设一致）；
-- 升级 DSH 后该清单可能变化：重跑 `tools/make_template.py` 即可按新 DSH 的 shipped 预设重新抽取；模板文件头里记录了抽取来源与 sha256。
+**它的许可不是「未知」，是 MIT**（2026-10-24 直接核对，命令见 `docs/licensing.md` §2）：
+
+| 证据 | 值 |
+|---|---|
+| `app.asar` 顶层 `package.json` | `"name": "@deepseek-ai/dsh-desktop"`, **`"license": "MIT"`** |
+| `app.asar :: dsh/node_modules/@deepseek-ai/dsh/package.json` | `@deepseek-ai/dsh-desktop-runtime`（无 license 字段） |
+| `app.asar :: dsh/node_modules/@deepseek-ai/dsh/LICENSE` | `MIT License` / `Copyright (c) 2026 DeepSeek` |
+| `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/package.json` | **`"license": "MIT"`**（22 行就出自这个包） |
+| `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/LICENSE` | `MIT License` / `Copyright (c) 2026 DeepSeek` |
+| 安装目录 | 无适用 EULA：`D:\dsh` 下只有 `LICENSE.electron.txt` / `LICENSES.chromium.html` / 7zip 的许可文本（都是第三方依赖），未见 DSH 自身的专有协议 |
+
+⇒ MIT 允许再分发与修改，唯一实质义务是**保留版权声明与许可声明** → 本文件**附录 C** 收录 DeepSeek 的 MIT 通知。
+我们只取「生成同版本预设所需的 22 条插件行」，不分发 DSH 的运行时、CLI 或界面代码。
+
+升级 DSH 后该清单可能变化：重跑 `tools/make_template.py --source <你的 bundle patch>` 即可按新 DSH 的
+shipped 预设重新抽取；模板文件头里记录了抽取来源与 sha256。
 
 `skills/MANIFEST.json` 是**生成物**（`tools/gen_skills_manifest.py`），不是手写数据；它记录的 `license` 字段原样搬自各技能 frontmatter。
+
+---
+
+### 3.2 商标与「无背书」声明
+
+- 本 kit 是**独立第三方作品**，与 AMD、Xilinx、DeepSeek 均**无隶属、赞助或背书关系**；
+- 文中出现的 `AMD` / `Xilinx` / `Vivado` / `DeepSeek Harness` / `DSH` 等名称仅用于**指称对应的产品或服务**
+  （nominative use），商标权归各自权利人；本 kit **不含**这些公司的商标素材（无 logo、无图标）；
+- 本 kit **不包含** Vivado 本体、Vivado 许可证、AMD entitlement 或任何密钥；使用者须自备合法许可；
+- AMD 的 `plugin-bundled/**` 子树按其自带 MIT 授权使用（外层 EULA §4.1 明确 Additional Materials
+  由各自的许可支配，见 §1.2 的边界说明与 `docs/licensing.md` §1）。
 
 ---
 
@@ -156,3 +190,39 @@ cd <vault>; diff -rq .ross-recon\official-skills\vivado-rtl-lint .dsh\skills\viv
 # 5) 技能清单门禁（禁手写 MANIFEST）
 py <kit>\tools\gen_skills_manifest.py --check
 ```
+
+---
+
+## 附录 C — MIT 许可全文（适用于取自 DeepSeek Harness 的 22 条 shipped 插件行）
+
+```text
+MIT License
+
+Copyright (c) 2026 DeepSeek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+（原文取自 `app.asar :: dsh/node_modules/@deepseek-ai/dsh/LICENSE`，逐字复制；对应义务见 §3.1。）
+
+---
+
+## 附录 D — Apache-2.0 全文
+
+vivado-mcp 的 Apache-2.0 全文随包放在 `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`（不在本文件重复，避免两处漂移）。
