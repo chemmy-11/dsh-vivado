@@ -1242,6 +1242,14 @@ $script:State['StageDir'] = Join-Path (Join-Path $script:State['DshHomePath'] 'b
 
 $configPath = ''
 $configProblem = ''
+# Prefer the config the installer actually wrote into the staging directory: it is the one that
+# produced the rendered patch (and therefore the MCP cwd/TEMP). Falling back to the example file
+# would judge placeholder paths instead of the live configuration.
+if ([string]::IsNullOrWhiteSpace($Config) -and
+    -not (Test-Path -LiteralPath (Join-Path $script:KitRoot 'config.yml')) -and
+    (Test-Path -LiteralPath (Join-Path $script:State['StageDir'] 'config.yml'))) {
+    $Config = Join-Path $script:State['StageDir'] 'config.yml'
+}
 try {
     $configPath = Resolve-KitConfigPath -KitRoot $script:KitRoot -Config $Config
 } catch {
