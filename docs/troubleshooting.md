@@ -7,6 +7,7 @@
 ## 1. 三条铁律（先看，能省掉 90% 的"装了没用"）
 
 1. **装完必须重启 DeepSeek Harness。** 配置只在宿主启动时读，Electron 宿主下 `dsh-hmr` 实测不生效。不遵守的症状：一切装好了，新会话的预设列表里**没有 `Vivado`**。
+   > 补充（2026-10-24 实测）：用会话内 `plugin_manager` 热装/热卸/反复重载 bundle 时，**静态内容**（预设、persona、技能挂载）能即时生效，但 **MCP 子进程不一定重新拉起**——见 §2.11。
 2. **所有 Vivado 相关路径必须纯 ASCII**（工程根、会话 cwd、`TEMP` / `TMP`、`<vivado-mcp>`、`<staging>`）。Vivado 的 Tcl 层按 GBK 解码路径（[doctor 详解](doctor-checks.md) §5）。不遵守的症状：`start_session` 起不来（常见报"Vivado GUI 进程提前退出"），或 Tcl 在 `open_project` / `write_*` 阶段报 `File not found` / 乱码。
 3. **Vivado 全局串行**：同一时刻只允许一个 Vivado 进程。不遵守的症状：`start_session` 卡住或失败、`run_*` 排队到超时；先 `tasklist | grep -i vivado` 确认干净再动手。
 
@@ -33,6 +34,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Profile <prof
 powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1
 ```
 判据是"**+32**"，不是工具总数：总数随 DSH 版本变，别拿旧文档的绝对数当标准（doctor 第 7 项就是按 32 判的）。另外确认这个会话用的确实是 `Vivado` 预设——`standard` 会话**没有**这些工具，这是设计。
+
+### 2.11 热更新过 bundle 之后，新会话一个 `mcp__vivado__*` 都没有（但 doctor 第 7 项仍是 32）
+
+- 现象：`Vivado` 预设还在、persona 与 8 个技能都正常，但工具数是 **0**（不是 32）；`doctor.ps1` 第 6/7/12 项却全 PASS；`py <vivado-mcp>\mcp_ctl.py list` 也正常给 32 行。
+- 原因：MCP 客户端行在**宿主内热重载**（`install_bundle` / `remove_bundle` / `set_bundle` 开关 / 多次重写 staging）之后没有重新拉起 stdio 子进程。判据：`Get-Process python*` 里**看不到** `-m vivado_mcp` 进程（或只剩旧的、启动时间早于本次改动），而新会话工具数为 0。
+- 修法：**重启宿主**。重启后再看两处：`doctor.ps1`（应 12 PASS / 1 WARN）+ 新 `Vivado` 会话问一句"列出你工具清单里所有 `mcp__vivado__*`"（应为 32）。
+- 为什么文档一直强调"改 bundle 内容就重启"：静态行能热切，**子进程不行**；把它当铁律可以省掉一整类"装了半天没工具"的误判。
 
 ### 2.3 `start_session` 失败
 

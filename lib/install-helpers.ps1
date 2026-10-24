@@ -794,7 +794,7 @@ function Copy-KitStageTree {
     $robArgs = @(
         $KitRoot, $StageDir,
         '/E', '/R:1', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP',
-        '/XD', '.git', '.tmp*', 'node_modules',
+        '/XD', '.git', '.tmp*', 'node_modules', 'dev',
         '/XF', 'cordis.patch.yml', 'config.yml', 'KIT-SPEC.md', '*.bak-*', '*.bak'
     )
     $r = Invoke-KitNative -FilePath 'robocopy.exe' -Arguments $robArgs

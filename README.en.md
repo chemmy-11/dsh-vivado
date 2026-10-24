@@ -171,6 +171,7 @@ dsh-vivado/
 | [`docs/architecture.md`](docs/architecture.md) | how it works: bundle composition, skill mounting, rendering, install path, how to extend |
 | [`docs/licensing.md`](docs/licensing.md) | upstream license audit (AMD / DeepSeek / vivado-mcp) and our obligations |
 | [`NOTICE`](NOTICE) · [`LICENSE`](LICENSE) | provenance and change list; MIT grant plus third-party carve-outs |
+| [`dev/README.md`](dev/README.md) | Development/acceptance scripts: end-to-end verification in an isolated `DSH_HOME` (**not shipped**) |
 
 The detailed documents under `docs/` are currently written in Chinese; the summaries above and the
 installer/doctor output are English-friendly.

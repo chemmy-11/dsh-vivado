@@ -157,6 +157,7 @@ dsh-vivado/
 | [`docs/architecture.md`](docs/architecture.md) | 它怎么工作的：bundle 组合、技能挂载、渲染、安装链路、后续怎么扩展 |
 | [`docs/licensing.md`](docs/licensing.md) | 上游许可审查（AMD / DeepSeek / vivado-mcp）与我们的义务 |
 | [`NOTICE`](NOTICE) · [`LICENSE`](LICENSE) | 来源与改动清单；MIT 授权与第三方 carve-out |
+| [`dev/README.md`](dev/README.md) | 开发/验收脚本：在隔离 `DSH_HOME` 里跑端到端验收（**不进安装包**） |
 
 ## 许可与致谢
 
