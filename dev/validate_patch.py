@@ -71,8 +71,16 @@ SHIPPED_ROWS = [
 ]
 
 # Discipline phrases the persona must keep whatever the tier is. Losing one of these is a
-# behavioural regression, not a cosmetic one.
-PERSONA_PHRASES = ("GLOBALLY SERIAL", "ASCII", "file:line", "is_error: false", "safe_tcl")
+# behavioural regression, not a cosmetic one. The last three lock in the 2026-10-25 fix: the
+# preset must drive the shell the session actually lists (never a third-party add-on), must name
+# the launcher/TCL_OK success criterion, and must describe detached long builds.
+PERSONA_PHRASES = ("GLOBALLY SERIAL", "ASCII", "file:line", "is_error: false", "safe_tcl",
+                   "pwsh", "TCL_OK", "Start-Process", "Detach")
+
+# Text that must NOT come back: these were the win_bash-coupled instructions removed on
+# 2026-10-25 (they told the agent to depend on a plugin that is absent in other people's
+# environments and that withdrew the official `pwsh` tool).
+PERSONA_FORBIDDEN = ("is the shell for command work", "fall back to `win_bash`")
 
 # Per-tier measured facts (docs/version-matrix.md).
 TIER_PHRASES = {
@@ -227,6 +235,12 @@ def main() -> int:
         for must in PERSONA_PHRASES:
             if must not in persona:
                 problems.append("persona lost required discipline phrase: {0!r}".format(must))
+        for banned in PERSONA_FORBIDDEN:
+            if banned in persona:
+                problems.append(
+                    "persona still depends on a third-party shell: {0!r} (the preset must work "
+                    "with the harness's own shell tools only)".format(banned)
+                )
         if args.tier:
             for must in TIER_PHRASES[args.tier]:
                 if must not in persona:

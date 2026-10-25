@@ -2,6 +2,11 @@
 
 > 所有队友**先读本文件**。任务书原文：`作者本机笔记库\本项目的需求契约（未随仓库发布）`
 > 前序事实：`作者本机笔记库\作者本机的规范化取证记录（未随仓库发布）`
+>
+> **2026-10-25 增补（本文件=2026-10-24 的历史分工记录，按历史件读）**：本轮按《dsh-vivado 实战问题与改进》
+> 加了 `tools/vivado-probe.ps1`、`tools/vivado-run.ps1`、`tools/tcl-check.ps1`、`templates/build-markers.tcl`、
+> `docs/tools.md`；persona 两档**去掉对第三方 shell（`win_bash`）的依赖**，改为只用会话里真实存在的官方
+> `pwsh`/`bash`；渲染器 `$values` 由 14 键变 15 键（新增 `{{KIT_DIR}}`）。现役契约以 `docs/architecture.md` 为准。
 
 ## 0. 一句话目标
 
@@ -26,7 +31,7 @@ D:\dsh-vivado\
 | `cordis.patch.yml` | Lead（**由模板渲染，不手写**） | 预设行 + skill-filesystem 行 + mcp-vivado 行 |
 | `config.example.yml` / `config.yml` | Lead | 扁平 `key: value`，见 §4 |
 | `lib/common.ps1` | Lead | PowerShell 公共函数（读 config、定位 DSH、备份、日志） |
-| `templates/preset.patch.yml.tmpl` | Lead | 带 `{{PLACEHOLDER}}` 的 YAML 模板（模板契约 9 个 + 渲染器 `$values` 14 键，多出来的 5 个只在 persona 片段里用） |
+| `templates/preset.patch.yml.tmpl` | Lead | 带 `{{PLACEHOLDER}}` 的 YAML 模板（模板契约 9 个 + 渲染器 `$values` 15 键，多出来的 6 个只在 persona 片段里用） |
 | `tools/render_patch.ps1` | Lead | 渲染器：config → cordis.patch.yml |
 | `install.ps1` / `uninstall.ps1` | **ps-installer** | 装/卸；调 `tools/render_patch.ps1` |
 | `docs/install.md` | **ps-installer** | 安装/卸载/回退说明书 |

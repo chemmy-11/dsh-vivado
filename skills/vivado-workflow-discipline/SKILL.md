@@ -1,9 +1,9 @@
 ---
 name: vivado-workflow-discipline
-description: "Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail、safe_tcl 占位符必须独占一个词、检查类工具默认无损不得静默截断、版本分档（2023.1 有本仓记录 / 2025.2+ 必须重探）等判据。当任务要打开或运行 Vivado 工程、综合、实现、时序/CDC 分析、XDC 约束检查、ILA 调试，或需要判断「工具说成功是不是真的成功」时使用。"
+description: "Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail、safe_tcl 占位符必须独占一个词、检查类工具默认无损不得静默截断、版本分档（2023.1 有本仓记录 / 2025.2+ 必须重探）、长构建必须脱离进程树并用标记行判进度、板卡不在场时的离线/dry-run 口径、报告文件与即时查询必须交叉核对等判据。当任务要打开或运行 Vivado 工程、综合、实现、时序/CDC 分析、XDC 约束检查、ILA 调试，或需要判断「工具说成功是不是真的成功」时使用。"
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
 baseline:
   amd_doc: "unspecified"
   tested_on: null
@@ -62,7 +62,8 @@ baseline:
 
 - 会话里有 `mcp__vivado__*`（kit 预设提供）就直连：多步会话成立、`wait:false` 可用。
 - 没有该前缀（未重启宿主 / 用标准预设）→ 走 CLI 桥，并记住「一进程一调用」。
-- 命令 shell 用 `win_bash`。若 `pwsh` 报 `unknown tool`（宿主会在会话中途摘除它），改 `win_bash`、**不要重试**。
+- **命令 shell 用会话里真实存在的那个**：Windows 上通常是官方 `pwsh`（本机实测它可能后端就是 Windows PowerShell 5.1，别假设 PowerShell 7 语法），POSIX 上是 `bash`。第三方常驻 shell（`win_bash` 之类）是**可选件**：本 kit 不依赖它，别人环境里没有它是常态；它中途消失也不要重试，换官方 shell 或直接走 MCP。会话里一个 shell 都没有时不要编命令——走 `mcp__vivado__*`，或把要跑的命令写成脚本文件交给用户执行。
+- **起 Vivado 不要现写命令**：用本包 `tools/vivado-probe.ps1`（探活）与 `tools/vivado-run.ps1 -Source <tcl> [-Detach]`（batch 运行）。两者按本机实测可用的 `Start-Process -FilePath <bat> -ArgumentList @(...)` 形态实现，绕开 `cmd /c "<带引号整串>"` 的二次套引号陷阱；32 个 MCP 工具的离线/会话依赖见 `docs/tools.md`。
 - 仿真在 Win11 24H2+ 可能因 `NoDefaultCurrentDirectoryInExePath` 导致 `compile.bat` 找不到而全挂（`本仓记录`，PITFALLS #73；本技能未复测）：修法为 `reg add HKCU\Environment /v NoDefaultCurrentDirectoryInExePath /d 0 /f`（下次登录生效），或会话内 `set NoDefaultCurrentDirectoryInExePath=0`。
 
 ## 5. 文档检索的两条通路（先知道自己把 query 发给了谁）
@@ -80,5 +81,46 @@ baseline:
 - [ ] 版本档写清了（2023.1 = `本仓记录`（未复测）/ 2025.2+ = `按文档/未实测`）。
 - [ ] 是否该复用既有 run 却重跑了？重跑要写明理由。
 - [ ] 用过文档检索就说明 query 去了哪里；NDA 项目应当没用外发通路。
+- [ ] 长构建是不是会话后台作业？必须脱离进程树，且只按标记行判进度（§7）。
+- [ ] 没上板时，措辞有没有偷换成「验证通过」（§8）。
+- [ ] 引用的时序数字来自报告文件还是即时查询？两路是否交叉核对过（§9）。
+
+## 7. 长构建：脱离进程树 + 标记行 + 分段
+
+`本仓记录`（2026-10-24 实测，PITFALLS 相邻条目；本技能未复测）：
+
+- 会话 `run_in_background` 作业**随回合中断而死**：21:02 起的 synth 在下一条用户消息后 `job_output` 报 `unknown job`，`tasklist` 里也没有 Vivado 了。
+- WMI `Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine='cmd.exe /c <build.cmd> > <log> 2>&1'}` 起的进程**脱离宿主进程树**，本会话 3 次全部存活到回合结束之后。
+- 代价：脱离进程**没有工具返回值**，必须让构建自己写状态行，外部只读状态行。
+
+做法（本包已给现成件）：
+
+1. `tools/vivado-run.ps1 -Source <tcl> -Detach`：生成 `<base>.detached.cmd` + `build_status.txt`，用 WMI 起进程，立即返回 `RUN_PID` / `RUN_STATUS`。
+2. 构建 Tcl 里 `source <kit>/templates/build-markers.tcl`，在关键节点 `kit_mark SYNTH_OK ...`、`kit_mark IMPL_OK ...`；失败路径 `kit_fail ...` 会落 `BUILD_FAILED`。
+3. 轮询只看 `build_status.txt` 尾几行 + `-log` 尾；标记行缺失表示「还在跑或已死」，**不是**「成功」。
+4. **能分段就分段**：synth 后 `write_checkpoint pre_impl.dcp`，实现段单独重跑。实测一次外部 `^C` 打断实现后只重跑 34 min，synth 没重做。
+5. 杀进程：先 `tasklist` 定位 PID，只杀那一个；`taskkill /T` 会波及无关子进程（本会话有一次 `/T` 的波及面没核清）。
+
+## 8. 板卡不在场时的离线流程
+
+`hw-ila-debug` / `hw-vio-debug` 两个技能假设「有 live session、有板」。板卡不在场时它们不适用，如实说明，改用离线口径：
+
+- 能离线做（实测有效）：`xdc_lint`（纯 Python，不占 Vivado）、`get_timing_report(report_file=...)`、`parse_ltx(file_path=...)`、`parse_bit_header`、`parse_xpr` / `get_project_info` 读工程、`get_critical_warnings`（读已有日志）。
+- **dry-run 约定**：脚本只读工程、输出写到独立目录（如 `out/dryrun_*`），不写 run 目录、不动 bit/ltx；把「将要跑什么」写进报告而不是真跑。
+- **负向对照**：判据要能被证伪。做法是造 3 组输入（1 组应 PASS、2 组应 FAIL），看工具是否**分别**给出 PASS/FAIL/FAIL；全都 PASS 说明判据是假的（本会话用假 pcap 做过这一组对照）。
+- **口径**：没上板就写「未上板，仅脚本/dry-run」；不要用「验证通过」「功能正常」这类上板措辞，也不要把仿真/静态检查的结论说成硬件结论。
+
+## 9. 报告文件 vs 即时查询：必须交叉核对
+
+`本仓记录`（2026-10-24 实测）：
+
+```tcl
+set wns [get_property SLACK [get_timing_paths -delay_type min_max -max_paths 1 -sort_by slack]]
+# 实测输出 WNS=0.004，而 timing summary 报告里 Setup WNS=+0.032（差 0.028 ns）
+```
+
+- 原因：`min_max` 取的是 setup/hold 里**最差的那一条**，这里取到的是 hold 路径，不是 setup WNS。
+- 正确口径：setup 用 `-delay_type max`、hold 用 `-delay_type min`；**报告一律以 timing summary 文件为准**，即时查询只作旁证。
+- 结论里写清数字来源（报告路径 or 即时查询）；两路不一致时先查自己的取数口径，再怀疑工具。
 
 > 纪律条目抽自本仓库 PITFALLS #69–#76（#64/#67/#72/#73 为相关补充）；本技能由本 kit 自研，无第三方代码。

@@ -13,10 +13,12 @@
     Substitution is literal (String.Replace), never regex, so paths with backslashes, `$`, `[`
     or spaces are safe. Output: LF line endings, UTF-8 without BOM.
 
-    Placeholders: {{PERSONA_BLOCK}} {{SKILLS_DIR}} {{MCP_PYTHON}} {{MCP_SITE}} {{VIVADO_BAT}}
+    Placeholders: {{PERSONA_BLOCK}} {{SKILLS_DIR}} {{KIT_DIR}} {{MCP_PYTHON}} {{MCP_SITE}} {{VIVADO_BAT}}
                   {{MCP_CWD}} {{TEMP_DIR}} {{PART}} {{PROJECT_ROOT}} {{VIVADO_VERSION}}
                   {{VIVADO_PATH}} {{PYTHON}} {{TOOL_COUNT}} {{KIT_VERSION}}
     `{{model}}` inside the persona is a DSH prompt placeholder and is deliberately left alone.
+    `{{KIT_DIR}}` is the bundle root: the persona points at the launchers under <kit>\tools\ so a
+    session never has to retype the Vivado start recipe (see docs/tools.md).
 
 .PARAMETER ConfigPath
     config.yml path (see config.example.yml).
@@ -96,6 +98,7 @@ $skillsSlash = ConvertTo-SlashPath $SkillsDir
 $values = [ordered]@{
     'PERSONA_BLOCK'  = ''   # filled below
     'SKILLS_DIR'     = $skillsSlash
+    'KIT_DIR'        = (ConvertTo-SlashPath $BundleDir)
     'MCP_PYTHON'     = ConvertTo-SlashPath $cfg['python']
     'MCP_SITE'       = ConvertTo-SlashPath $cfg['vivado_mcp_site']
     'VIVADO_BAT'     = $batPath
@@ -111,7 +114,7 @@ $values = [ordered]@{
 }
 
 # ASCII guard: a non-ASCII path in the rendered patch breaks Vivado (GBK) and is a doctor FAIL.
-foreach ($k in @('SKILLS_DIR', 'MCP_SITE', 'MCP_CWD', 'TEMP_DIR', 'VIVADO_BAT', 'PROJECT_ROOT', 'MCP_PYTHON')) {
+foreach ($k in @('SKILLS_DIR', 'KIT_DIR', 'MCP_SITE', 'MCP_CWD', 'TEMP_DIR', 'VIVADO_BAT', 'PROJECT_ROOT', 'MCP_PYTHON')) {
     if (-not (Test-AsciiPath $values[$k])) {
         throw ("rendered value for {0} contains non-ASCII characters and would break Vivado: {1}" -f $k, $values[$k])
     }

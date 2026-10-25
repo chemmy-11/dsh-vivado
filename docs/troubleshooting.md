@@ -63,16 +63,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1 | Select-String
 ### 2.4 工具"说成功"，但正文里全是 `[ERROR]`
 
 - 原因：MCP 协议的 `is_error` 只反映传输层是否失败，Vivado 的业务失败仍会带着 `is_error: false` 返回。
-- 修法：**判据看文本，不看 `is_error`**：正文出现 `[ERROR]` / `CRITICAL WARNING` 就是失败。这条已写进预设纪律（`templates/persona/2023.1.frag.yml:17`）。看到 `[ERROR]` 就把那一行连同错误码（`[Common 17-xxx]` / `[Vivado 12-xxx]`）贴回来，按码查，不要当成功继续。
+- 修法：**判据看文本，不看 `is_error`**：正文出现 `[ERROR]` / `CRITICAL WARNING` 就是失败。这条已写进预设纪律（persona 的 "Every conclusion must carry evidence" 那条）。看到 `[ERROR]` 就把那一行连同错误码（`[Common 17-xxx]` / `[Vivado 12-xxx]`）贴回来，按码查，不要当成功继续。
 
 ### 2.5 会话里 `pwsh` 报 `unknown tool "pwsh"`
 
-- 原因：本机实测 `pwsh` 会被异步摘除，工具列表里看着有、调用时没了。
-- 修法：改用 `win_bash`，**不要重试 `pwsh`**（已写进预设纪律，`templates/persona/2023.1.frag.yml:20`）。
+- 原因（2026-10-25 更正）：这**不是** DSH 的缺陷，而是装了**第三方 shell 插件**之后的事（`dsh-win-bash` 一类，`replacePwsh: true` 会在会话中途把官方 `pwsh` 从工具面摘掉）。本包不依赖任何第三方 shell；出现这条错误说明是别的插件在改工具面。
+- 修法：
+  1. 报一次就别再重试同名工具，换会话里**仍然在**的 shell（官方 `pwsh` / `bash`），或直接走 `mcp__vivado__*`；
+  2. 想根治：卸载或禁用那个第三方 shell 插件再重启宿主，官方 `pwsh` 会回来；保持它禁用也完全不影响本包（本包脚本都是 `powershell -NoProfile -File ...`）；
+  3. 会话里一个 shell 都没有时，把要跑的命令写成脚本文件交给用户执行，不要凭空 exec。
+- 本包的立场：**不被动适配别人开发的插件**。预设只保证「会话里有什么 shell 就用什么」；`win_bash` 之类的常驻 shell 是可选加速件，不是前提。
 
 ### 2.6 一次 `run_tcl` 吐掉几千 tokens（`open_run` / `open_project` 尤甚）
 
-- 原因：`run_tcl` 原样返回 stdout，不裁剪；一次 `open_project` 的进度输出就能到约 8k tokens（`templates/persona/2023.1.frag.yml:21`）。
+- 原因：`run_tcl` 原样返回 stdout，不裁剪；一次 `open_project` 的进度输出就能到约 8k tokens（persona 的 "`run_tcl` returns raw stdout" 那条）。
 - 修法：优先用 `report_*` / `get_run_progress` 这类有界的工具；必须跑大段 Tcl 时，在 Tcl 里把输出重定向到文件，再只读文件尾部；打了 §2.7 的补丁后可显式传 `max_lines` / `save_full_to`。
 
 ### 2.7 `xdc_lint` / `get_cdc_report` 明细被截断
@@ -115,6 +119,42 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1 -Profile <pr
 ```powershell
 cmd /c rmdir "<profile>\node_modules\dsh-vivado"
 ```
+
+### 2.12 `vivado.bat` 起不来，或"exit 1 且零输出"
+
+- 现象（2026-10-24 实测）：`& vivado.bat -version`、bash 里的 `cmd //c "..."`、pwsh 里的 `cmd /c "<带引号整串>"` 全都返回 exit 1 且**零字节输出**；`Start-Process -ArgumentList '/c', <带引号整串>` 会让 cmd 收到二次套引号，报 `The filename, directory name, or volume label syntax is incorrect.`
+- 判据：`exit != 0` 且输出 0 字节 = **启动失败**，不是"没问题"；`vivado.bat -version` **不是**探针（rdiArgs → prodversion → `exit /b 1`，重定向后什么都不打）。
+- 唯一稳定配方（本包已封装，别手写）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\vivado-probe.ps1              # 探活：只认 PROBE_RESULT=OK
+powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\vivado-run.ps1 -Source .\x.tcl   # 跑 batch
+```
+
+- 参数：`-VivadoBat <path>` 指向别的安装；`-KeepFiles` 保留 tcl/log/journal/console 作证据。脚本打印的 `PROBE_*` / `RUN_*` 行就是证据，求助时贴这些行。
+- 为什么不用 `Start-Process -PassThru` 判退出码：Windows PowerShell 5.1 下对 `.bat` 拿到的 Process 对象 `ExitCode` 是 `$null`（2026-10-25 实测：进程已正常 `Exiting Vivado`，`ExitCode` 仍为空）。所以本包脚本让 cmd 自己把 `%ERRORLEVEL%` 写进 `build_status.txt`，再读回来。
+
+### 2.13 长构建跑到一半没了（回合结束被回收，或收到 `^C`）
+
+- 现象 A：`run_in_background` 起的综合/实现，在下一条用户消息后消失（`job_output` 报 `unknown job`，`tasklist` 里也没有 Vivado）。原因：会话后台作业随回合中断被回收。
+- 现象 B：已经脱离进程树的构建被外部 `^C` 打断（本机一次实现段跑 34 min 被作废，只能重跑）。
+- 修法：
+  1. 长构建一律脱离：`vivado-run.ps1 -Source <tcl> -Detach` → 返回 `RUN_PID`，进程不在会话进程树里；
+  2. 构建 Tcl 顶部 `source <kit>\templates\build-markers.tcl`，关键节点 `kit_mark SYNTH_OK ...`；包装器自己会写 `BUILD_START` / `BUILD_EXIT=<rc>` / `BUILD_FAILED`；
+  3. 判进度只认 `build_status.txt` 的标记行 + `-log` 尾部（脱离进程没有工具返回值，标记缺失 = 还在跑或已死，不是成功）；
+  4. 分段：synth 后 `write_checkpoint`，实现段可单独重跑（本机 `^C` 后只重跑 34 min，没重做 synth）；
+  5. 收尾杀进程：先 `tasklist` 定位 PID 再杀单个，`taskkill /T` 会波及无关子进程。
+
+### 2.14 想先验 Tcl 语法，别再写"tclsh 不可用 → 跳过"
+
+- 事实：Vivado 2023.1 自带 `bin\unwrapped\win64.o\tclsh85t.exe`（Tcl 8.5.14，与工具内的解释器同版本），但直接调会 `0xC0000135`（缺 DLL）——要先加 `<vivado>\lib\win64.o` 到 `PATH`，并设 `TCL_LIBRARY=<vivado>\tps\tcl\tcl8.5`。
+- 用本包脚本一次搞定（不启动 Vivado、不动工程）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\tcl-check.ps1 <目录或 .tcl 文件...>
+```
+
+- 判据：`TCLCHECK_RESULT=PASS` 才算过；失败会打 `TCLCHECK_TAIL|` 明细行。`complete=1` 是 `info complete` 的结论，只保证"这份文件是完整命令序列"，不保证运行时语义正确。
 
 ## 3. `doctor.ps1` 13 项速查
 

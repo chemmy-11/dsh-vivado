@@ -11,6 +11,7 @@
 *.tmpl   text eol=lf
 *.json   text eol=lf
 *.patch  text eol=lf
+*.tcl    text eol=lf
 *.svg    text eol=lf
 *.txt    text eol=lf
 .gitattributes  text eol=lf

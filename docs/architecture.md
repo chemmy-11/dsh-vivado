@@ -64,6 +64,7 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 |---|---|---|
 | `{{PERSONA_BLOCK}}` | persona 片段全文（片段自己先渲染一遍） | persona 行整块（含 10 空格缩进） |
 | `{{SKILLS_DIR}}` | `-SkillsDir`，默认 `<staging>/skills` | `skill-filesystem.customSkillDirs` |
+| `{{KIT_DIR}}` | `-BundleDir`，默认 bundle 根（安装时就是 `<staging>`） | 只出现在 persona 片段里：指向随包的 `tools/vivado-probe.ps1` / `vivado-run.ps1` 与 `templates/build-markers.tcl` |
 | `{{MCP_PYTHON}}` | `config.yml: python` | MCP stdio `command` |
 | `{{MCP_SITE}}` | `vivado_mcp_site` | MCP 环境变量 `PYTHONPATH` |
 | `{{VIVADO_BAT}}` | `<vivado_path>/vivado.bat`（可被 `vivado_bat` 覆盖） | MCP 环境变量 `VIVADO_PATH` |
@@ -73,10 +74,10 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 | `{{KIT_VERSION}}` | `package.json` 的 `version` | 预设 description 里的包版本 |
 | `{{PART}}`、`{{PROJECT_ROOT}}`、`{{VIVADO_VERSION}}`、`{{VIVADO_PATH}}`、`{{PYTHON}}` | 同名 config 值 | 只出现在 persona 片段里，不直接出现在模板里 |
 
-- 模板层面的占位符是上表**前 9 个**，`make_template.py --check` 把这个集合锁死（`tools/make_template.py:230-231`、`:271-273`）；后 5 个只在 persona 片段中。渲染器的值表共 14 个键（`tools/render_patch.ps1:96-111`）。
+- 模板层面的占位符是上表**前 9 个**（`PERSONA_BLOCK` … `KIT_VERSION`），`make_template.py --check` 把这个集合锁死（`tools/make_template.py:230-231`、`:271-273`）；其余（`PART`、`PROJECT_ROOT`、`VIVADO_VERSION`、`VIVADO_PATH`、`PYTHON`、`KIT_DIR`）只在 persona 片段中出现。渲染器的值表共 15 个键（`tools/render_patch.ps1` 的 `$values`）。
 - `{{model}}` 是 DSH 的提示词占位符，**故意不替换**（`tools/render_patch.ps1:19`、`:145`），因此它也不允许被当成"残留占位符"判死——doctor 第 10 项同样豁免它。
 - **版本档位**：`vivado_version` 去掉非数字字符后按 `[version]` 比较，`>= 2025.2` 用 `2025.2plus`，否则 `2023.1`；片段不存在直接 `throw`（`tools/render_patch.ps1:76-87`）。两档的实测/未实测界线见 [版本分档](version-matrix.md) §1。
-- **渲染后自检**（`tools/render_patch.ps1:142-157`）：① 除 `{{model}}` 外无残留占位符；② 有顶层 `- insert:`；③ 恰好 23 条 `- id:` 且含 `persona` / `skill-filesystem` / `mcp-vivado`；④ persona 的 `prefix:` 是 `|` 缩进块标量。渲染前另有一道 ASCII 守卫，7 个路径值出现非 ASCII 直接 `throw`（`:113-118`）；输出强制 LF、UTF-8 无 BOM（`:164-165`）。
+- **渲染后自检**（`tools/render_patch.ps1:142-160`）：① 除 `{{model}}` 外无残留占位符；② 有顶层 `- insert:`；③ 恰好 23 条 `- id:` 且含 `persona` / `skill-filesystem` / `mcp-vivado`；④ persona 的 `prefix:` 是 `|` 缩进块标量。渲染前另有一道 ASCII 守卫，8 个路径值出现非 ASCII 直接 `throw`；输出强制 LF、UTF-8 无 BOM。
 
 ## 5. 安装链路：`install.ps1` 的 9 步
 
@@ -148,7 +149,7 @@ bundle 在「设置 → 插件」里显示的标题、描述和图标**不来自
 ## 9. 已知限制
 
 1. **Electron 宿主下 `dsh-hmr` 不生效**：profile 与 bundle patch 只在宿主**启动时**读。换版本档位、改 `config.yml`、重装 bundle，全都要重启（`docs/install.md:11`）。
-2. **`pwsh` 可能中途消失**：本机实测会报 `unknown tool "pwsh"`，命令工作应走 `win_bash`，不要重试 `pwsh`（`templates/persona/2023.1.frag.yml:20`）。
+2. **会话里的 shell 不是本包能决定的**（2026-10-25 更正）：预设只挂官方 `pwsh`（Windows）/ `bash`（其它）；`win_bash` 这类第三方 shell 插件装了也不依赖，卸了也不影响。若官方 `pwsh` 被第三方插件中途摘掉（`unknown tool "pwsh"`），本包的处理是"换仍然存在的 shell 或走 MCP"，**不是**去适配那个插件（`docs/troubleshooting.md` §2.5）。
 3. **DSH 升级后 shipped 22 行可能变**：重跑 `py tools/make_template.py --source <你机器上已实证的 bundle patch>` 重抽模板与审计件，再跑 `--check`（`tools/make_template.py:14-20`、`:289-319`）。
 4. **staging 是增量复制**：上一版有、新版已删的文件会残留在 staging；要绝对干净就先 `uninstall.ps1` 再 `install.ps1`（`docs/install.md:259`）。
 5. **不改第三方源码**：`<vivado-mcp>` 视为只读，补丁手动应用（`NOTICE` §2.1）。
@@ -162,12 +163,15 @@ bundle 在「设置 → 插件」里显示的标题、描述和图标**不来自
 | 加一个技能 | 新建 `skills/<name>/SKILL.md`，`name:` 必须等于目录名 | `py tools/gen_skills_manifest.py`（MANIFEST 由生成器唯一产出、禁手写）+ `--check`；`doctor.ps1` 第 13 项 |
 | 改 persona 分档内容 | `templates/persona/2023.1.frag.yml` 与 `2025.2plus.frag.yml`（两档都改，否则同一份纪律会在两档漂移） | 渲染一次确认块标量完好；`doctor.ps1` 第 10 项 |
 | 新增/改名占位符 | `tools/render_patch.ps1` 的 `$values`、`tools/make_template.py` 的 `EXPECTED_PLACEHOLDERS`、模板或片段 | 两个 `--check` + 渲染 + `doctor.ps1` |
+| 加/改一个运行辅助脚本 | `tools/vivado-*.ps1`；公共件在 `lib/common.ps1`（`Find-KitVivadoBat` / `New-KitAsciiWorkDir` / `Write-KitBatchLauncher` / `Get-KitBatchExitCode`）。**不要**改回 `Start-Process -PassThru` 取退出码 | 真跑 `tools/vivado-probe.ps1`（`PROBE_RESULT=OK`）+ `tools/tcl-check.ps1` 对一个 `.tcl` 目录（`TCLCHECK_RESULT=PASS`）+ `doctor.ps1` |
 
 门禁按这个顺序跑（前一步不过就不用跑后面）：
 
 ```powershell
 py tools\make_template.py --check          # 模板/审计件与生成器是否逐字节一致
 py tools\gen_skills_manifest.py --check    # skills/MANIFEST.json 是否漂移
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\vivado-probe.ps1     # 会真起一次 Vivado（~15s）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\tcl-check.ps1 .\templates
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -RenderOnly   # 只 staging + 渲染，自检在渲染器里
 powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1 -Json          # 13 项机器可读
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf       # 真装之前先看完整计划，不改任何字节
@@ -175,3 +179,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf       
 
 - 本仓库**不随包提供端到端验收脚本**：最后一步永远是「真装一次 + 重启宿主 + 在新会话里确认 `Vivado` 预设与 32 个 `mcp__vivado__*`」。症状对照见 [troubleshooting](troubleshooting.md)。
 - 端到端没有 `--check` 那样硬的判据，所以改完要么真装，要么至少跑 `install.ps1 -RenderOnly` + `doctor.ps1 -Json` 并把输出贴在 PR / 报告里。
+
+## 11. 运行辅助脚本（`tools/vivado-*.ps1`）
+
+三个脚本都是给**会话里的助手**用的，不是给安装流程用的：预设 persona 直接点名它们，所以每次会话不必重新发明"怎么起 Vivado"。
+
+| 脚本 | 干什么 | 为什么存在（实测） |
+|---|---|---|
+| `tools/vivado-probe.ps1` | 写一行 Tcl 打印 `TCL_OK [info patchlevel]`，跑一次 batch，输出 `PROBE_*` 行 | `vivado.bat -version` 不是探针：重定向后 exit 1 且零输出（2026-10-24） |
+| `tools/vivado-run.ps1` | 把一份 Tcl 跑成 batch；`-Detach` 用 WMI 起脱离进程树的构建；两种模式都写 `build_status.txt` | 会话后台作业随回合中断被回收（2026-10-24 21:02）；`cmd /c "<带引号整串>"` 会二次套引号 |
+| `tools/tcl-check.ps1` | 找到 Vivado 自带的 `tclsh85t.exe`、补齐 `PATH` + `TCL_LIBRARY`，逐文件跑 `info complete` | 直接调 tclsh85t 报 `0xC0000135`（缺 DLL）；旧 CI 因此把 Tcl 语法检查永久 SKIP 了 |
+
+**为什么都要经过一个生成的 `.cmd` 包装器**：Windows PowerShell 5.1 里，`Start-Process -PassThru` 对 `.bat` 返回的 Process 对象 `ExitCode` 是 `$null`（2026-10-25 实测，Vivado 已经正常 `Exiting` 了仍然为空）。把 `%ERRORLEVEL%` 交给 cmd 自己写进状态文件，再读回来，是唯一不丢值的做法（`lib/common.ps1` 的 `Write-KitBatchLauncher` / `Get-KitBatchExitCode`）。包装器里两处 cmd 解析细节是刻意的，**不要"简化"**：`%KIT_RC% >> "file"` 之间必须留空格（变量展开后裸 `0>>` / `2>>` 是句柄重定向，不是追加）；`cmd /c` 后面只跟**一个**带引号的 token（整串带引号是实测失败形态）。
+
+附加文件：`templates/build-markers.tcl` 给构建 Tcl 用（`kit_mark SYNTH_OK ...` / `kit_fail ...`），它只认 `KIT_STATUS_FILE` 环境变量，所以 cmd / pwsh / bash 下同一份脚本都能用。

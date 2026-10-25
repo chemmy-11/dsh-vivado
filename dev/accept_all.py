@@ -18,9 +18,9 @@ Isolation
     install.ps1 / uninstall.ps1 / doctor.ps1 / dsh all receive -DshHome and DSH_HOME pointing at
     the probe home.
 
-The matrix (49 assertions; see dev/README.md for what each group covers)
-    static     8  generator/renderer check, skills manifest, BOTH persona tiers render+validate,
-                  no build junk, no author home path in repo text files
+The matrix (50 assertions; see dev/README.md for what each group covers)
+    static     9  generator/renderer check, skills manifest, BOTH persona tiers render+validate,
+                  no build junk, launcher assets present + ASCII, no author home path in repo text
     install   18  cli install, profile/composition markers, idempotency, -WhatIf, skills untouched
     uninstall  7  clean removal, composition still works, second run is a no-op
     manual     4  -Mode manual (no pnpm) install
@@ -304,7 +304,7 @@ def find_dsh_cli(explicit):
 
 
 # ---------------------------------------------------------------------------
-#  live-profile guard (out of the 49-assertion matrix, but fails the run)
+#  live-profile guard (out of the 50-assertion matrix, but fails the run)
 # ---------------------------------------------------------------------------
 def live_dsh_home() -> Path:
     root = os.environ.get("USERPROFILE") or str(Path.home())
@@ -382,6 +382,28 @@ def group_static() -> bool:
                                or ".bak-" in path.name or path.name == "config.yml"):
             junk.append(str(path.relative_to(KIT)))
     ok &= record("no build junk / no committed config.yml", not junk, ", ".join(junk[:5]))
+
+    # Shipped launcher assets: the persona tells every session to call these by name, so a
+    # rename or a deleted file is a behavioural regression, not cosmetics. They must also stay
+    # ASCII-only: Windows PowerShell 5.1 reads a .ps1 as ANSI, and the .tcl helper is sourced by
+    # Vivado's Tcl 8.5 interpreter.
+    assets = ["tools/vivado-probe.ps1", "tools/vivado-run.ps1", "tools/tcl-check.ps1",
+              "templates/build-markers.tcl"]
+    asset_problems = []
+    for rel in assets:
+        path = KIT / rel
+        if not path.is_file():
+            asset_problems.append("missing " + rel)
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            asset_problems.append("{0}: {1}".format(rel, exc))
+            continue
+        if any(ord(ch) > 127 for ch in text):
+            asset_problems.append(rel + ": non-ASCII (PS 5.1 reads .ps1 as ANSI)")
+    ok &= record("launcher assets present and ASCII-only", not asset_problems,
+                 "; ".join(asset_problems[:4]))
 
     # Distribution red line: no author home path, no leftover developer account name in any
     # text file that ships. `dev/` is the maintainer's own harness (not installed by install.ps1)
@@ -698,7 +720,7 @@ def main() -> int:
     global KEEP_HOME
 
     ap = argparse.ArgumentParser(
-        description="End-to-end acceptance for the dsh-vivado kit: 6 groups, 49 assertions, "
+        description="End-to-end acceptance for the dsh-vivado kit: 6 groups, 50 assertions, "
                     "always inside an isolated DSH_HOME.",
         epilog="Exit codes: 0 = all assertions passed, 1 = a failure (or the live-profile guard "
                "tripped), 2 = setup problem.",

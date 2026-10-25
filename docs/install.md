@@ -6,12 +6,13 @@
 
 ---
 
-## 0. 先记住三条
+## 0. 先记住四条
 
 1. **装完必须重启 DeepSeek Harness**（Electron 宿主，`dsh-hmr` 不生效）。重启后**新建会话**，在预设里选 `Vivado`。
 2. 安装器**只改两处**：把 bundle 复制到 `<DSH_HOME>\bundles\dsh-vivado\`，再在 profile 的 `package.json` 里加**一行依赖 + 一个 bundle 名**。
    它**不会**写 `<DSH_HOME>\skills`，**不会**动你已有的任何 plugin 行，**不需要管理员权限**，**不改注册表 / 不改 PATH / 不 setx**。
 3. 改 profile 之前先备份成 `*.bak-<yyyyMMdd>`；装完/卸载完都会把**逐行回退命令**打出来。
+4. **不需要任何第三方插件**：本包只依赖 DSH 本体（预设自带官方 `pwsh`/`bash` 工具）。`win_bash` 之类的第三方 shell 插件是可选件——装了本包不去用，卸了本包照常工作；本包也从不改它们的配置。
 
 ---
 

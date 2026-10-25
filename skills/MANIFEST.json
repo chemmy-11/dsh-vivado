@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_by": "tools/gen_skills_manifest.py",
-  "source_hash": "f32b320388d8fcaed644d18bbbd59e2de18361dd5ad888b7e10ad5db01c5e22f",
+  "source_hash": "0dd33d830dc2188002efb55c60e2009a3ea119d503e6cda37ad1803ab972abfa",
   "tool_catalog": {
     "available": false,
     "source": "not-embedded",
@@ -194,7 +194,7 @@
     {
       "name": "vivado-workflow-discipline",
       "dir": "vivado-workflow-discipline",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail…",
       "license": "MIT",
       "references": [

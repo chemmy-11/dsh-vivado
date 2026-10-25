@@ -1,6 +1,6 @@
 {
   "name": "dsh-vivado",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Aggregate DSH bundle for Xilinx/AMD Vivado work on Windows: a version-tiered Vivado session preset (persona + measured truths), AMD official skills mounted through skill-filesystem, and a stdio vivado-mcp server (32 tools). Installed and verified by install.ps1 / doctor.ps1.",

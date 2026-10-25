@@ -29,6 +29,7 @@
 | 一个叫 **`Vivado`** 的会话预设 | 新建会话时选它（默认仍是 `standard`）。它把「先读工程 → `xdc_lint` → 复用既有综合/实现结果 → 确实必要时才综合」这套顺序，以及「路径必须 ASCII、Vivado 全局串行、结论必须带证据」这类纪律写进了助手的行为准则 |
 | **32 个** `mcp__vivado__*` 工具 | 综合/实现、时序、利用率、CDC、XDC 检查、ILA 波形、会话管理等，全部通过 stdio MCP 直连本机 Vivado（第三方 `vivado-mcp` 提供） |
 | **8 个技能** | AMD 官方 6 件（RTL 综合日志分析、lint、仿真、版本管理、ILA、VIO，MIT）+ 2 件自研（AMD 文档检索、Vivado 工作流纪律）。**随包挂载，不往你的 `~/.dsh/skills` 写任何文件** |
+| **3 个随包运行脚本** | `tools/vivado-probe.ps1`（可靠探活，`vivado.bat -version` 不算）、`tools/vivado-run.ps1`（batch 运行；`-Detach` 起脱离进程树的长构建）、`tools/tcl-check.ps1`（用 Vivado 自带的 8.5.14 解释器做 Tcl 语法门禁）。会话里不必每次现写启动命令，也不会踩 `cmd /c` 二次套引号 |
 | 体检与干净的卸载 | `doctor.ps1` 13 项逐条 PASS/WARN/FAIL 并给一句修法；`uninstall.ps1` 还原 profile 并清掉自己装的目录 |
 
 **适合谁**：Windows 上做 Xilinx/AMD FPGA、已经在用 DeepSeek Harness 桌面版、希望助手能真正操作 Vivado 而不是只在对话里出主意的人。
@@ -45,6 +46,7 @@
 | Python | **≥ 3.10**（`vivado-mcp` 0.3.26 要求；用你跑 `vivado-mcp` 的那个解释器即可） |
 | vivado-mcp | 已 `pip install vivado-mcp==0.3.26` 到**纯 ASCII 目录**，且能 `import vivado_mcp` |
 | 路径 | 工程根、`TEMP`、`TMP`、vivado-mcp 安装位置**全部纯 ASCII**（中文路径会让 Vivado 的 Tcl 层按 GBK 解码而失败） |
+| 第三方插件 | **不需要**。只依赖 DSH 本体：预设自带官方 shell 工具（Windows 上 `pwsh`，其它平台 `bash`）。`win_bash` 这类第三方 shell 插件是**可选件**——装了本包不会去用它，卸了也不会影响本包 |
 | 许可 | 你自己合法的 Vivado license |
 
 ## 安装
@@ -136,8 +138,8 @@ dsh-vivado/
   package.json              bundle 清单（一个配置型 DSH bundle）
   install.ps1  uninstall.ps1  doctor.ps1  lib/   安装、卸载、体检
   config.example.yml        配置样板（安装器会据此生成 config.yml）
-  tools/                    渲染器、模板生成器、技能清单生成器
-  templates/                preset 模板、shipped 22 行审计件、persona/ 两档片段
+  tools/                    渲染器、模板生成器、技能清单生成器 + 3 个运行辅助脚本
+  templates/                preset 模板、shipped 22 行审计件、persona/ 两档片段、build-markers.tcl
   skills/                   8 个技能 + MANIFEST.json + 来源说明
   patches/vivado-mcp/       4 个可选补丁 + 许可证全文 + 应用/验证说明
   docs/                     安装详解、体检详解、版本表、原理、排错、许可
@@ -154,6 +156,7 @@ dsh-vivado/
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | 症状 → 原因 → 修法，体检 13 项速查，求助时该贴什么 |
 | [`docs/doctor-checks.md`](docs/doctor-checks.md) | 13 项体检的判据与阈值（含为什么有的只 WARN） |
 | [`docs/version-matrix.md`](docs/version-matrix.md) | Vivado 版本真值分档表（实测 / 未实测分列） |
+| [`docs/tools.md`](docs/tools.md) | 32 个 MCP 工具清单：每个工具是离线可用还是要活会话，以及「哪种活该走哪个工具」 |
 | [`docs/architecture.md`](docs/architecture.md) | 它怎么工作的：bundle 组合、技能挂载、渲染、安装链路、后续怎么扩展 |
 | [`docs/licensing.md`](docs/licensing.md) | 上游许可审查（AMD / DeepSeek / vivado-mcp）与我们的义务 |
 | [`NOTICE`](NOTICE) · [`LICENSE`](LICENSE) | 来源与改动清单；MIT 授权与第三方 carve-out |
