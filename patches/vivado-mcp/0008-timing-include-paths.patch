@@ -1,0 +1,147 @@
+--- a/vivado_mcp/tools/report_tools.py
++++ b/vivado_mcp/tools/report_tools.py
+@@ -97,6 +97,8 @@
+     output_format: str = "text",
+     report_file: str = "",
+     baseline_file: str = "",
++    include_paths: bool = True,
++    max_paths: int = 0,
+ ) -> str:
+     """获取结构化时序报告。
+ 
+@@ -105,11 +107,19 @@
+     读取 UTF-8 Vivado 原始报告，无需会话。基线比较只给上下文匹配的观察差值，
+     不证明约束等价或完整签核；本工具不写文件。
+ 
++    实现后报告通常有 500+ 条路径(prj12 的 7.8 MB 报告 → 204 KB 返回文本)。
++    只要摘要时传 include_paths=False;只想看最差 N 条时传 max_paths=N。
++    默认 (include_paths=True, max_paths=0) 与旧版行为逐字节相同。
++
+     Args:
+         session_id: 目标会话 ID。
+         output_format: text（默认）或 json；json 模式错误也返回 JSON。
+         report_file: 可选原始时序报告路径，最多 16 MiB；不是 JSON 快照。
+         baseline_file: 可选之前保存的完整 JSON 返回值路径，最多 4 MiB。
++        include_paths: False 时不输出"关键路径"明细段(只留摘要/判定/降级说明)，
++            JSON 模式同样不输出 paths 键。
++        max_paths: >0 时明细最多 N 条，并在段尾写明"还有 X 条未显示
++            （max_paths=N），用 max_paths=0 看全部"；0（默认）= 全量。
+     """
+     def error(message: str) -> str:
+         if output_format == "json":
+@@ -120,11 +130,14 @@
+ 
+     if output_format not in ("text", "json"):
+         return "[ERROR] output_format 必须为 text 或 json"
++    if max_paths < 0:
++        return "[ERROR] max_paths 不能为负数（0 = 不限制）"
+     if report_file:
+         try:
+             raw = read_bounded_text(report_file, MAX_REPORT_BYTES)
+             return _format_timing_result(
+                 raw, parse_timing_summary(raw), output_format, "", report_file, baseline_file,
++                include_paths=include_paths, max_paths=max_paths,
+             )
+         except (OSError, ValueError, UnicodeError) as exc:
+             return error(f"[ERROR] 读取时序报告失败: {exc}")
+@@ -199,7 +212,7 @@
+ 
+         return _format_timing_result(
+             result.output, timing_report, output_format, session_id, "", baseline_file,
+-            live_stage_output,
++            live_stage_output, include_paths=include_paths, max_paths=max_paths,
+         )
+     except Exception as e:
+         logger.warning("获取时序报告失败: %s", e)
+@@ -208,17 +221,18 @@
+ 
+ def _format_timing_result(
+     raw, report, output_format, session_id, report_file, baseline_file, live_stage_output="",
++    include_paths=True, max_paths=0,
+ ):
+     evidence = make_timing_evidence(
+         raw, report, session_id=session_id, report_file=report_file,
+-        live_stage_output=live_stage_output,
++        live_stage_output=live_stage_output, include_paths=include_paths, max_paths=max_paths,
+     )
+     report.source_stage = evidence["stage"]
+     if baseline_file:
+         evidence["comparison"] = compare_timing_baseline(evidence, baseline_file)
+     if output_format == "json":
+         return json.dumps(evidence, ensure_ascii=False, indent=2, allow_nan=False)
+-    output = format_timing_report(report)
++    output = format_timing_report(report, include_paths=include_paths, max_paths=max_paths)
+     # 新证据解析保留部分 NA / pulse-width 数据；旧摘要不能抢先宣布 PASS。
+     status = evidence["verdict"]["status"]
+     if status != "met_observed_checks":
+
+--- a/vivado_mcp/analysis/timing_parser.py
++++ b/vivado_mcp/analysis/timing_parser.py
+@@ -435,12 +435,25 @@
+     return TimingReport(summary=summary, paths=paths)
+ 
+ 
+-def format_timing_report(report: TimingReport) -> str:
++def format_timing_report(
++    report: TimingReport, include_paths: bool = True, max_paths: int = 0,
++) -> str:
+     """将 TimingReport 格式化为人类可读的摘要文本。
+ 
+     重点高亮违例信息，方便 LLM 和用户快速判断时序状态。
+     在报告开头明示数据来源阶段(post-synth/post-route),避免用户把估算时序
+     误判为最终时序。
++
++    Args:
++        report: 解析结果。
++        include_paths: False 时**不输出**关键路径明细段(只留摘要/判定/降级说明),
++            用于 7 MB 级实现后报告(500+ 条路径会把返回文本撑到 200 KB);
++            省略时会在末尾留一行提示"明细已省略 + 共 N 条"。默认 True。
++        max_paths: >0 时明细最多显示 N 条,并在段尾写明还剩多少条未显示
++            (用 max_paths=0 看全部)。默认 0 = 全量。
++
++    默认参数(True, 0)的输出与旧版逐字节相同:路径段头仍是
++    ``--- 关键路径 (N 条) ---``,段内每条仍是 4 行。
+     """
+     s = report.summary
+     lines: list[str] = []
+@@ -498,11 +511,16 @@
+         if s.whs < 0:
+             lines.append(f"  [!] Hold 违例: WHS = {s.whs:.3f} ns，需检查时钟偏斜。")
+ 
+-    # 路径详情
+-    if report.paths:
++    # 路径详情(include_paths=False 时整段省略;max_paths>0 时截断并明示剩余条数)
++    if report.paths and include_paths:
++        total = len(report.paths)
++        shown = report.paths[:max_paths] if max_paths > 0 else report.paths
+         lines.append("")
+-        lines.append(f"--- 关键路径 ({len(report.paths)} 条) ---")
+-        for idx, p in enumerate(report.paths, 1):
++        if len(shown) < total:
++            lines.append(f"--- 关键路径 (显示 {len(shown)} / 共 {total} 条) ---")
++        else:
++            lines.append(f"--- 关键路径 ({total} 条) ---")
++        for idx, p in enumerate(shown, 1):
+             flag = "MET" if p.met else "VIOLATED"
+             lines.append(f"  [{idx}] Slack {p.slack_ns:+.3f} ns ({flag})")
+             lines.append(f"      {p.source} -> {p.destination}")
+@@ -511,6 +529,19 @@
+                 f"      Requirement: {p.requirement_ns:.3f} ns"
+                 f"  Data Delay: {p.data_delay_ns:.3f} ns"
+             )
++        if len(shown) < total:
++            remaining = total - len(shown)
++            lines.append(
++                f"  ... 还有 {remaining} 条未显示（max_paths={max_paths}），"
++                "用 max_paths=0 看全部"
++            )
++    elif report.paths:
++        # 明细被显式关掉:留一行可追溯提示,避免读者以为报告里根本没有路径数据。
++        lines.append("")
++        lines.append(
++            f"关键路径明细: 已省略（include_paths=False）；共 {len(report.paths)} 条，"
++            "用 include_paths=True 或 max_paths=N 查看"
++        )
+ 
+     # 违例路径详情(仅在 timing_met=False 且查询成功时填充)
+     if report.violating_paths:

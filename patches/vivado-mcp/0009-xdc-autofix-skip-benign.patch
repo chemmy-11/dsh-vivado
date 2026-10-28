@@ -1,0 +1,173 @@
+--- a/vivado_mcp/analysis/xdc_auto_fixer.py
++++ b/vivado_mcp/analysis/xdc_auto_fixer.py
+@@ -10,12 +10,17 @@
+ - PIN_CONFLICT / PIN_CONFLICT_CROSS_FILE —— 不知道哪条是对的
+ - DUPLICATE_PORT —— 后者覆盖前者,但可能是用户故意(多板复用)
+ - FILE_NOT_FOUND —— 没文件没法修
++- 已知良性的 MISSING_IOSTANDARD(GT 参考时钟 / MIG-DDR 引脚)—— 这些端口的
++  IOSTANDARD 本就由 MGTREFCLK 专用引脚语义或 MIG 生成的 XDC 提供(PITFALLS #20),
++  补一条 IOSTANDARD 反而会引入新的 DRC / Bank 电压冲突,plan_fixes 一律跳过
++  并计入 skipped(benign_skipped),不生成补丁
+ """
+ 
+ from __future__ import annotations
+ 
+ import logging
+ import os
++import re
+ import shutil
+ from dataclasses import asdict, dataclass, field
+ from datetime import date
+@@ -59,6 +64,8 @@ class FixReport:
+     board: str = ""
+     patches: list[Patch] = field(default_factory=list)
+     skipped: list[LintIssue] = field(default_factory=list)  # 检出但不能自动修
++    # 其中「已知良性」的那部分(也计入 skipped,单列出来给报告分组用)
++    benign_skipped: list[LintIssue] = field(default_factory=list)
+     files_modified: list[str] = field(default_factory=list)
+     failed_files: list[tuple[str, str]] = field(default_factory=list)  # (路径, 失败原因)
+ 
+@@ -68,6 +75,7 @@ class FixReport:
+             "board": self.board,
+             "patch_count": len(self.patches),
+             "skipped_count": len(self.skipped),
++            "benign_skipped_count": len(self.benign_skipped),
+             "files_modified": self.files_modified,
+             "failed_files": [{"file": f, "reason": r} for f, r in self.failed_files],
+             "patches": [asdict(p) for p in self.patches],
+@@ -87,6 +95,27 @@ def _tag() -> str:
+     return f"# auto-fixed by xdc_auto_fix {date.today().isoformat()}"
+ 
+ 
++# 端口名末尾的总线下标：c0_ddr4_dq[31] -> c0_ddr4_dq（与 xdc_linter 同一口径）
++_PORT_INDEX_RE = re.compile(r"\[\d+(?::\d+)?\]$")
++
++
++def _port_family(port: str) -> str:
++    """端口名归一成「族」，供「已知良性已跳过」按族聚合。"""
++    if not port:
++        return "(未命名端口)"
++    return _PORT_INDEX_RE.sub("", port) or port
++
++
++def _is_benign(issue: LintIssue) -> bool:
++    """issue 是否被 xdc_linter 标为「已知良性」(GT 参考时钟 / MIG-DDR 引脚)。
++
++    用 getattr 读取:良性族标注在 xdc_linter 侧(可选补丁)。单独应用本补丁、
++    LintIssue 还没有 benign 字段时,getattr 退回 False —— 行为与旧版一致,
++    不会因为缺字段直接抛 AttributeError。
++    """
++    return bool(getattr(issue, "benign", False))
++
++
+ def _build_iostd_patch(issue: LintIssue, iostd: str) -> Patch | None:
+     """为 MISSING_IOSTANDARD 构造"在原行后插入新行"的补丁。"""
+     path = Path(issue.file)
+@@ -183,7 +212,13 @@ def plan_fixes(
+     xdc_paths: list[str | Path],
+     board: str = "",
+ ) -> FixReport:
+-    """扫描 XDC 文件并生成修复计划(不落盘)。"""
++    """扫描 XDC 文件并生成修复计划(不落盘)。
++
++    已知良性条目(GT 参考时钟 / MIG-DDR 引脚缺 IOSTANDARD)**不生成补丁**,
++    计入 ``skipped`` 并单列到 ``benign_skipped``:给 MGTREFCLK 专用引脚或
++    MIG 已约束的 DDR 引脚补 IOSTANDARD,会让本来正确的设计多出 Bank 电压
++    冲突 / DRC 风险(PITFALLS #20 同族),比不修更坏。
++    """
+     report = FixReport(dry_run=True, board=board)
+ 
+     lint_report = lint_xdc_files(xdc_paths)
+@@ -191,6 +226,12 @@ def plan_fixes(
+     period = _clock_period_for_board(board)
+ 
+     for issue in lint_report.issues:
++        # 第一步先筛良性:任何规则只要被标 benign 就只跳不修 ——
++        # 目前只有 MISSING_IOSTANDARD 会置位,放最前面可保证将来加族也不漏
++        if _is_benign(issue):
++            report.skipped.append(issue)
++            report.benign_skipped.append(issue)
++            continue
+         if issue.rule == "MISSING_IOSTANDARD":
+             patch = _build_iostd_patch(issue, iostd)
+             if patch is not None:
+@@ -312,6 +353,7 @@ def apply_fixes(report: FixReport) -> FixReport:
+         board=report.board,
+         patches=report.patches,
+         skipped=report.skipped,
++        benign_skipped=report.benign_skipped,
+         files_modified=modified_files,
+         failed_files=failed_files,
+     )
+@@ -323,9 +365,22 @@ def format_fix_report(report: FixReport) -> str:
+     mode = "DRY-RUN(仅预览,未写盘)" if report.dry_run else "APPLIED(已写入)"
+     header = f"=== XDC 自动修复: {mode} ==="
+ 
++    benign = report.benign_skipped
++    n_benign = len(benign)
+     out: list[str] = [header]
+     out.append(f"板卡 profile: {report.board or '(未指定,只用默认 IOSTANDARD=LVCMOS33)'}")
+-    out.append(f"补丁: {len(report.patches)} 条  |  跳过(需人工处理): {len(report.skipped)} 条")
++    # 跳过总数里良性占多少，必须在摘要行就能看见 —— 否则「跳过 109 条」看着像 109 个待办
++    skip_detail = (
++        f"（其中 {n_benign} 条已知良性，已跳过不修）"
++        if n_benign
++        else "（需人工处理）"
++    )
++    out.append(f"补丁: {len(report.patches)} 条  |  跳过: {len(report.skipped)} 条{skip_detail}")
++    if n_benign:
++        out.append(
++            f"已知良性(不阻断)已跳过: {n_benign} 条 —— 不生成 IOSTANDARD 补丁"
++            "(补了反而引入新 DRC/冲突)"
++        )
+ 
+     if not report.dry_run:
+         out.append(f"已修改文件: {len(report.files_modified)} 个")
+@@ -355,17 +410,43 @@ def format_fix_report(report: FixReport) -> str:
+                 else:
+                     out.append(f"    + 改 : {p.after_text.strip()}")
+ 
+-    if report.skipped:
++    # 已知良性单独成段：按端口族聚合 + 原因，不混进「需手动处理」
++    if benign:
++        out.append("")
++        out.append(f"--- 已跳过:已知良性(不阻断,{n_benign} 条) ---")
++        fam_stats: dict[str, list] = {}   # 族 -> [条数, 理由]
++        for issue in benign:
++            entry = fam_stats.setdefault(
++                _port_family(issue.port), [0, getattr(issue, "benign_reason", "")]
++            )
++            entry[0] += 1
++            if not entry[1]:
++                entry[1] = getattr(issue, "benign_reason", "")
++        for fam, (cnt, reason) in sorted(
++            fam_stats.items(), key=lambda kv: (-kv[1][0], kv[0])
++        ):
++            out.append(f"  {fam}: {cnt} 条 —— {reason or '已知良性族'}")
++        out.append("  这些族不需要人工处理，也不要自动补 IOSTANDARD。")
++
++    manual_skipped = [i for i in report.skipped if not _is_benign(i)]
++    if manual_skipped:
+         out.append("")
+         out.append("--- 跳过(需手动处理) ---")
+-        for i in report.skipped:
++        for i in manual_skipped:
+             out.append(
+                 f"  [{i.rule}] {Path(i.file).name}:{i.line}  "
+                 f"{i.message[:80]}"
+             )
+ 
+-    if report.dry_run and report.patches:
++    if report.dry_run:
+         out.append("")
+-        out.append("确认无误后,重新调用:xdc_auto_fix(..., dry_run=False)")
++        if report.patches:
++            out.append("确认无误后,重新调用:xdc_auto_fix(..., dry_run=False)")
++        else:
++            out.append(
++                f"没有可自动修复的补丁"
++                + (f"(其中 {n_benign} 条为已知良性,跳过即可)" if n_benign else "")
++                + ",不需要执行 dry_run=False。"
++            )
+ 
+     return "\n".join(out)

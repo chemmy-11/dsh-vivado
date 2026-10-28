@@ -337,7 +337,8 @@ function Write-KitBatchLauncher {
         [Parameter(Mandatory = $true)][string]$Console,
         [Parameter(Mandatory = $true)][string]$Status,
         [Parameter(Mandatory = $true)][string]$WorkDir,
-        [string]$Mode = 'wait'
+        [string]$Mode = 'wait',
+        [string]$CleanupTask = ''
     )
     $lines = @(
         '@echo off',
@@ -348,9 +349,16 @@ function Write-KitBatchLauncher {
         ('call "' + $VivadoBat + '" -mode batch -source "' + $Tcl + '" -notrace -log "' + $Log + '" -journal "' + $Journal + '" > "' + $Console + '" 2>&1'),
         'set "KIT_RC=%ERRORLEVEL%"',
         ('echo BUILD_EXIT=%KIT_RC% >> "' + $Status + '"'),
-        ('if not "%KIT_RC%"=="0" echo BUILD_FAILED rc=%KIT_RC% at %TIME% >> "' + $Status + '"'),
-        'exit /b %KIT_RC%'
+        ('if not "%KIT_RC%"=="0" echo BUILD_FAILED rc=%KIT_RC% at %TIME% >> "' + $Status + '"')
     )
+    # A detached-via-Task-Scheduler run leaves a one-shot task behind; the wrapper removes it as its
+    # very last act (after BUILD_EXIT is already on disk), because nothing else knows when the build
+    # ended. schtasks /delete /f on the task that is currently running may end this cmd right after
+    # that line -- which is why it is the last one.
+    if ($CleanupTask -ne '') {
+        $lines += ('schtasks /delete /tn "' + $CleanupTask + '" /f >nul 2>&1')
+    }
+    $lines += 'exit /b %KIT_RC%'
     $text = ($lines -join "`r`n") + "`r`n"
     [System.IO.File]::WriteAllText($Path, $text, (New-Object System.Text.ASCIIEncoding))
     return $Path

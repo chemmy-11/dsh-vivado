@@ -17,18 +17,24 @@
     Modes:
       * default (wait) - blocks until Vivado exits. Only for short scripts: one implementation
         segment was measured at 34 min, longer than any tool call survives.
-      * -Detach        - starts the same wrapper through
-        `Invoke-CimMethod -ClassName Win32_Process -MethodName Create`, so the build outlives the
-        turn. A detached build cannot return a tool result: progress is read from the status file
+      * -Detach        - starts the same wrapper through WMI, so the build outlives the turn:
+        first the classic COM route `[wmiclass]'Win32_Process'.Create(...)`, then the
+        `Invoke-CimMethod` cmdlet, then Task Scheduler as a last resort. 2026-10-28 measured on this
+        host: the CIM cmdlet answers ReturnValue=8 for any command line while the COM route answers
+        0 and its child survived a KILL_ON_JOB_CLOSE job being closed; a default schtasks task
+        carries IdleSettings{Duration=PT10M, StopOnIdleEnd=true} and a 34-minute implementation
+        launched that way was silently stopped after 9m20s. RUN_LAUNCHER says which path ran.
+        A detached build cannot return a tool result: progress is read from the status file
         (BUILD_START / SYNTH_OK / IMPL_OK / BUILD_EXIT / BUILD_FAILED) and the `-log` tail.
 
     Machine-readable output (one KEY=value per line):
         RUN_MODE=<wait|detach>    RUN_RESULT=<OK|FAIL|TIMEOUT|LAUNCHED>
+        RUN_LAUNCHER=<wmi-com|wmi-cim|schtasks>   RUN_TASK=<scheduled task name or empty>
         RUN_EXIT=<code|unknown>   RUN_BANNER=<yes|no>
         RUN_LOG=<path>            RUN_JOURNAL=<path>
         RUN_CONSOLE=<path>        RUN_CONSOLE_BYTES=<n>
         RUN_STATUS=<path>         RUN_WRAPPER=<path>
-        RUN_CWD=<path>            RUN_PID=<pid>   RUN_RV=<cim return value>
+        RUN_CWD=<path>            RUN_PID=<pid>   RUN_RV=<cim return value, 0 when schtasks was used>
     Exit codes: 0 = success / launched, 1 = run failed or timeout, 2 = setup error.
 
 .PARAMETER Source
@@ -129,17 +135,84 @@ if ($Detach) {
     $commandLine = 'cmd.exe /c "' + $wrapper + '"'
     $rv = -1
     $childPid = 0
+    $launcher = 'wmi-com'
+    $taskName = ''
+
+    # (1) classic WMI COM route: the provider (WmiPrvSE) creates the process, so it is outside the
+    # caller's job object. 2026-10-28 measured on this host: this path answers ReturnValue=0 and the
+    # child survived a KILL_ON_JOB_CLOSE job being closed (probe: job_com_escape_probe.py ->
+    # COM_RESULT=ESCAPED), while the `Invoke-CimMethod` cmdlet path below answers ReturnValue=8 for
+    # ANY command line. Prefer the route that is measured to work.
     try {
-        $res = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine }
+        $procClass = [wmiclass]'Win32_Process'
+        $res = $procClass.Create($commandLine)
         $rv = [int]$res.ReturnValue
         $childPid = [int]$res.ProcessId
     } catch {
-        Say FAIL ('Win32_Process.Create failed: ' + $_.Exception.Message)
-        Write-Output 'RUN_RESULT=FAIL'
-        exit 1
+        Say WARN ('[wmiclass] Win32_Process.Create threw: ' + $_.Exception.Message)
+        $rv = -1
+    }
+
+    # (2) CIM cmdlet route (the form that worked on 2026-10-24; measured RV=8 here on 2026-10-28).
+    if ($rv -ne 0) {
+        $launcher = 'wmi-cim'
+        try {
+            $res = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine }
+            $rv = [int]$res.ReturnValue
+            $childPid = [int]$res.ProcessId
+        } catch {
+            Say WARN ('Invoke-CimMethod Win32_Process.Create threw: ' + $_.Exception.Message)
+            $rv = -1
+        }
+    }
+
+    # (3) last resort: Task Scheduler. The service creates the process in its own context (outside
+    # the caller's job object too), but a default schtasks task carries
+    # IdleSettings{Duration=PT10M, StopOnIdleEnd=true} and no ExecutionTimeLimit override: measured
+    # 2026-10-28, a schtasks-launched 34-minute implementation was silently stopped after 9m20s
+    # (no rc file, no "Exiting Vivado" line). Keep it only as a fallback and say so.
+    if ($rv -ne 0) {
+        $launcher = 'schtasks'
+        $safeBase = ($base -replace '[^A-Za-z0-9_-]', '_')
+        $taskName = 'dshvivado-' + $safeBase + '-' + $PID
+        $stamp = (Get-Date).AddYears(-1).ToString('yyyy-MM-dd')
+        [void](Write-KitBatchLauncher -Path $wrapper -VivadoBat $bat -Tcl $src -Log $Log -Journal $Journal `
+                -Console $Console -Status $StatusFile -WorkDir $OutDir -Mode $mode -CleanupTask $taskName)
+        # schtasks writes the harmless "Task may not run because /ST is earlier than current time"
+        # WARNING to stderr; under $ErrorActionPreference='Stop' PowerShell 5.1 turns any native
+        # stderr line into a terminating error, which would abort the launch after the task exists.
+        # Keep the preference local to these two calls and judge by $LASTEXITCODE only.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $createOut = & schtasks.exe /create /tn $taskName /tr $commandLine /sc once /st 00:00 /sd $stamp /f 2>&1
+            $createRc = $LASTEXITCODE
+            $runOut = @()
+            $runRc = 1
+            if ($createRc -eq 0) {
+                $runOut = & schtasks.exe /run /tn $taskName 2>&1
+                $runRc = $LASTEXITCODE
+            }
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
+        if ($createRc -ne 0) {
+            Say FAIL ('detach failed: WMI (COM + CIM) unavailable; schtasks /create failed: ' + ($createOut -join ' '))
+            Write-Output 'RUN_RESULT=FAIL'
+            exit 1
+        }
+        if ($runRc -ne 0) {
+            [void](& schtasks.exe /delete /tn $taskName /f 2>&1)
+            Say FAIL ('detach failed: WMI (COM + CIM) unavailable; schtasks /run failed: ' + ($runOut -join ' '))
+            Write-Output 'RUN_RESULT=FAIL'
+            exit 1
+        }
+        $rv = 0
     }
 
     Write-Output 'RUN_MODE=detach'
+    Write-Output ('RUN_LAUNCHER=' + $launcher)
+    Write-Output ('RUN_TASK=' + $taskName)
     Write-Output ('RUN_RV=' + $rv)
     Write-Output ('RUN_PID=' + $childPid)
     Write-Output ('RUN_WRAPPER=' + $wrapper)
@@ -148,14 +221,9 @@ if ($Detach) {
     Write-Output ('RUN_JOURNAL=' + $Journal)
     Write-Output ('RUN_CONSOLE=' + $Console)
     Write-Output ('RUN_STATUS=' + $StatusFile)
-    if ($rv -eq 0) {
-        Write-Output 'RUN_RESULT=LAUNCHED'
-        Say PASS ('detached build launched (PID {0}); poll the status file, not this tool' -f $childPid)
-        exit 0
-    }
-    Write-Output 'RUN_RESULT=FAIL'
-    Say FAIL ('Win32_Process.Create returned ' + $rv)
-    exit 1
+    Write-Output 'RUN_RESULT=LAUNCHED'
+    Say PASS ('detached build launched via {0}; poll the status file, not this tool' -f $launcher)
+    exit 0
 }
 
 # ---- wait mode -----------------------------------------------------------------------------

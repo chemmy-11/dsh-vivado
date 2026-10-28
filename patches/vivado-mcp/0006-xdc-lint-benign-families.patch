@@ -1,0 +1,393 @@
+--- a/vivado_mcp/analysis/xdc_linter.py
++++ b/vivado_mcp/analysis/xdc_linter.py
+@@ -9,6 +9,10 @@ NSTD-1/UCIO-1 之类的问题。检查维度:
+ 4. create_clock 缺少 -period
+ 5. set_property 语法明显错误(空引脚名等)
+ 6. 编码降级提示:文件既非 UTF-8 也非 GBK 时按替换符降级解码,检查结果可能不完整
++7. 已知良性族标注:GT 参考时钟 / MIG-DDR4 引脚只有 PACKAGE_PIN 是工程约定
++   (PITFALLS #20:MGTREFCLK 专用引脚不需要 IOSTANDARD;DDR4 的 IOSTANDARD
++   由 MIG 生成的 XDC 提供),这类 MISSING_IOSTANDARD 标 ``benign=True``,
++   报告里单列「已知良性(不阻断)」段,不再和真要修的条目混在一起
+ 
+ 所有检查基于原始 XDC 文件文本,不依赖 Vivado Tcl 解析器。
+ """
+@@ -38,6 +42,10 @@ class LintIssue:
+     file: str           # XDC 文件路径
+     line: int           # 行号
+     port: str = ""      # 涉及端口(如适用)
++    # 已知良性(不阻断):目前只有 MISSING_IOSTANDARD 会置位,见 _BENIGN_FAMILIES。
++    # 良性条目**依然计入** issue 总数与明细(不静默吞),只是不计入「阻断判定」。
++    benign: bool = False
++    benign_reason: str = ""   # 良性理由(中文短句,含依据编号)
+ 
+ 
+ @dataclass
+@@ -54,12 +62,24 @@ class LintReport:
+     def warnings(self) -> list[LintIssue]:
+         return [i for i in self.issues if i.severity == "warning"]
+ 
++    @property
++    def benign_issues(self) -> list[LintIssue]:
++        """已知良性条目(单列一段,不阻断)。"""
++        return [i for i in self.issues if i.benign]
++
++    @property
++    def blocking_issues(self) -> list[LintIssue]:
++        """非良性条目 —— 「阻断判定」只看这些。"""
++        return [i for i in self.issues if not i.benign]
++
+     def to_dict(self) -> dict:
+         return {
+             "files_checked": self.files_checked,
+             "issue_count": len(self.issues),
+             "error_count": len(self.errors),
+             "warning_count": len(self.warnings),
++            "benign_count": len(self.benign_issues),
++            "blocking_count": len(self.blocking_issues),
+             "issues": [asdict(i) for i in self.issues],
+         }
+ 
+@@ -93,6 +113,61 @@ def _glob_match(pattern: str, name: str) -> bool:
+     return re.fullmatch(regex, name) is not None
+ 
+ 
++# 已知良性族表：(端口族正则, 良性理由)。族名先经 _port_family() 归一
++# （c0_ddr4_dq[31] -> c0_ddr4_dq），再按 re.IGNORECASE 匹配，不看大小写。
++# **只对 MISSING_IOSTANDARD 生效**：别的规则不因端口名而豁免。
++# 扩表只需加一行，判定逻辑不用动；调用方临时追加的族/glob 用 benign_allowlist。
++_BENIGN_FAMILIES: list[tuple[re.Pattern[str], str]] = [
++    (
++        re.compile(r"^(?:mgtrefclk|gt.*refclk)", re.IGNORECASE),
++        "GT 参考时钟：MGTREFCLK 专用引脚由 GT 原语内部约束，不需要 IOSTANDARD"
++        "（PITFALLS #20）",
++    ),
++    (
++        re.compile(r"^(?:c\d+_)?ddr\d*(?:_|$)|^mig(?:_|$)", re.IGNORECASE),
++        "MIG/DDR 引脚：IOSTANDARD 由 MIG 生成的 XDC 提供，顶层 XDC 只给 "
++        "PACKAGE_PIN 是既有约定",
++    ),
++]
++
++
++def _benign_reason(
++    rule: str,
++    port: str,
++    allowlist: list[str] | None = None,
++) -> str:
++    """判断一条问题是否「已知良性」，返回良性理由（空串 = 不良性、要修）。
++
++    只对 ``MISSING_IOSTANDARD`` 生效：GT 参考时钟按 MGTREFCLK 用法不需要
++    IOSTANDARD（PITFALLS #20），MIG/DDR4 引脚的 IOSTANDARD 由 MIG 生成的
++    约束提供 —— 顶层 XDC 重复写反而会和 MIG 冲突。其它规则一律返回空串，
++    严重度与阻断判定不受端口名影响。
++
++    Args:
++        rule: 规则名。
++        port: 涉及端口（``c0_ddr4_dq[31]`` 这类带下标的会给归一成族）。
++        allowlist: 调用方追加的端口族 / glob 模式（如 ``c0_ddr4_*``、
++            ``gt_refclk_*``），命中同样标良性；大小写不敏感，可匹配原始端口
++            名（``led[0]``）或归一后的族名（``c0_ddr4_dq``）。
++    """
++    if rule != "MISSING_IOSTANDARD" or not port:
++        return ""
++    family = _port_family(port)
++    for pattern, reason in _BENIGN_FAMILIES:
++        if pattern.match(family):
++            return reason
++    for raw in allowlist or ():
++        pattern = str(raw).strip()
++        if not pattern:
++            continue
++        # glob 匹配原始端口名与归一后的族名两条路：调用方写 led[0] 或 led[*] 都能中
++        if _glob_match(pattern.lower(), port.lower()) or _glob_match(
++            pattern.lower(), family.lower()
++        ):
++            return f"调用方 benign_allowlist 命中 {pattern}（端口族 {family}）"
++    return ""
++
++
+ def _parse_constraints_with_iostd(path: Path) -> tuple[
+     list[tuple[int, str, str, str | None]],   # (line, port, pin, iostandard|None)  -dict 和传统
+     list[tuple[int, str, str]],                # (line, port, iostandard) 独立 IOSTANDARD 语句
+@@ -163,6 +238,7 @@ def _parse_constraints_with_iostd(path: Path) -> tuple[
+ def lint_xdc_file(
+     path: str | Path,
+     known_iostd_ports: set[str] | None = None,
++    benign_allowlist: list[str] | None = None,
+ ) -> list[LintIssue]:
+     """对单个 XDC 文件做静态检查,返回问题列表。
+ 
+@@ -171,6 +247,8 @@ def lint_xdc_file(
+         known_iostd_ports: 其它 XDC 文件里已配置 IOSTANDARD 的端口集合
+             (可含通配符模式),供 lint_xdc_files 跨文件聚合后传入;
+             单文件直接调用时留空即可。
++        benign_allowlist: 调用方追加的「已知良性」端口族 / glob 模式,
++            只影响 MISSING_IOSTANDARD 的 benign 标注,不减少 issue 条数。
+     """
+     path_obj = Path(path)
+     if not path_obj.exists():
+@@ -230,6 +308,9 @@ def lint_xdc_file(
+             continue
+         if any(_glob_match(pat, port) for pat in iostd_patterns):
+             continue
++        # 良性族(GT refclk / MIG-DDR)照报不误,只是打上 benign 标记:
++        # 条数不吞、行号不丢,「阻断判定」才不吃这口噪声
++        reason = _benign_reason("MISSING_IOSTANDARD", port, benign_allowlist)
+         issues.append(LintIssue(
+             severity="warning",
+             rule="MISSING_IOSTANDARD",
+@@ -240,6 +321,8 @@ def lint_xdc_file(
+             file=source_file,
+             line=lineno,
+             port=port,
++            benign=bool(reason),
++            benign_reason=reason,
+         ))
+ 
+     # 规则 3: 同 port 多次被约束 PACKAGE_PIN(后者覆盖前者)
+@@ -275,8 +358,17 @@ def lint_xdc_file(
+     return issues
+ 
+ 
+-def lint_xdc_files(paths: list[str | Path]) -> LintReport:
+-    """批量 lint 多个 XDC 文件,并做跨文件检查(全局 pin 冲突、全局 IOSTANDARD)。"""
++def lint_xdc_files(
++    paths: list[str | Path],
++    benign_allowlist: list[str] | None = None,
++) -> LintReport:
++    """批量 lint 多个 XDC 文件,并做跨文件检查(全局 pin 冲突、全局 IOSTANDARD)。
++
++    Args:
++        paths: XDC 文件路径列表。
++        benign_allowlist: 调用方追加的「已知良性」端口族 / glob 模式，
++            透传给 lint_xdc_file；只影响 benign 标注，不减少 issue 条数。
++    """
+     report = LintReport()
+     all_pin_map: dict[str, list[tuple[str, int, str]]] = {}  # pin -> [(file, line, port)]
+ 
+@@ -301,7 +393,11 @@ def lint_xdc_files(paths: list[str | Path]) -> LintReport:
+         path_obj = Path(p)
+         report.files_checked.append(str(path_obj))
+         report.issues.extend(
+-            lint_xdc_file(path_obj, known_iostd_ports=global_iostd_ports)
++            lint_xdc_file(
++                path_obj,
++                known_iostd_ports=global_iostd_ports,
++                benign_allowlist=benign_allowlist,
++            )
+         )
+ 
+     # 跨文件的 PIN_CONFLICT(同一 pin 在不同文件里指向不同 port)
+@@ -383,11 +479,16 @@ def format_lint_report(
+     report: LintReport,
+     severity: str = "all",
+     max_items: int = 0,
++    show_benign: bool = True,
+ ) -> str:
+     """格式化 lint 报告为中文文本。
+ 
+-    输出分三段：先按规则聚合的摘要（永远覆盖全量，不受 max_items 限制），
+-    再列明细，最后在**显式**要求裁剪时明写「还有 N 条未显示」。
++    输出分四段：表头（含良性计数 +「阻断判定」一行）→ 按规则聚合（全量，
++    不受 max_items 限制）→「已知良性（不阻断）」按端口族聚合段 → 明细，
++    最后在**显式**要求裁剪时明写「还有 N 条未显示」。
++
++    已知良性条目（GT 参考时钟 / MIG-DDR 引脚缺 IOSTANDARD）**永远计入条数**，
++    只从「阻断判定」里剔除；``show_benign=False`` 也只影响明细段。
+ 
+     Args:
+         report: lint 结果。
+@@ -395,6 +496,9 @@ def format_lint_report(
+             非法值按 ``all`` 处理（由调用方负责校验并给用户报错）。
+         max_items: 明细分条上限。``0``（默认）= 不限、输出全量；负数等同 0。
+             检查类工具默认必须无损：省上下文只能由调用方显式选择。
++        show_benign: ``True``（默认）明细照列良性条目并打 ``[known-benign]``；
++            ``False`` 时明细段不列良性条目，但表头良性计数与「已知良性」段
++            仍为全量，并明写「已隐藏 N 条良性条目」。
+     """
+     lines: list[str] = []
+ 
+@@ -405,21 +509,39 @@ def format_lint_report(
+ 
+     n_err = len(report.errors)
+     n_warn = len(report.warnings)
++    benign = report.benign_issues
++    n_benign = len(benign)
++    n_blocking = len(report.blocking_issues)   # 「阻断判定」只看这些
++    # 良性计数只在确有条目时进表头：没有良性族时表头与旧版逐字节一致
++    benign_suffix = f": {n_benign} known-benign" if n_benign else ""
+     header = "=== XDC 静态检查: "
+     if n_err > 0:
+-        header += f"FAIL ({n_err} errors, {n_warn} warnings) ==="
++        header += f"FAIL ({n_err} errors, {n_warn} warnings{benign_suffix}) ==="
+     else:
+-        header += f"WARN ({n_warn} warnings) ==="
++        header += f"WARN ({n_warn} warnings{benign_suffix}) ==="
+     lines.append(header)
+     lines.append(f"扫描文件: {len(report.files_checked)}")
++    # 一眼可判「这份 XDC 到底要不要动」——109 条全是约定误报时不该看起来像失败
++    if n_blocking == 0:
++        lines.append(
++            f"阻断判定: 不阻断（{n_benign} 条全部是已知良性，不需要改 XDC）"
++        )
++    else:
++        lines.append(f"阻断判定: 阻断（{n_blocking} 条非良性）")
+ 
+     sev_filter = severity if severity in ("error", "warning") else "all"
+-    selected = (
++    sev_selected = (
+         report.issues
+         if sev_filter == "all"
+         else [i for i in report.issues if i.severity == sev_filter]
+     )
+-    hidden = len(report.issues) - len(selected)
++    # hidden 的语义保持旧版 = 被 severity 挡掉的条数，不混入 show_benign
++    hidden = len(report.issues) - len(sev_selected)
++    selected = sev_selected
++    benign_hidden = 0
++    if not show_benign:
++        benign_hidden = sum(1 for i in selected if i.benign)
++        selected = [i for i in selected if not i.benign]
+ 
+     # --- 第一段：按规则聚合（全量，保证没有规则被 max_items 隐藏）---
+     lines.append("")
+@@ -435,20 +557,48 @@ def format_lint_report(
+             kv[0],
+         ),
+     ):
++        n_benign_rule = sum(1 for i in subset if i.benign)
++        benign_note = f"，其中 {n_benign_rule} 条已知良性" if n_benign_rule else ""
+         lines.append(
+-            f"  [{subset[0].severity}] {rule}: {len(subset)} 条"
++            f"  [{subset[0].severity}] {rule}: {len(subset)} 条{benign_note}"
+             f"{_rule_breakdown(subset)}"
+         )
+ 
++    # --- 第二段：已知良性（不阻断）按端口族聚合，每族条数 + 理由 ---
++    if benign:
++        lines.append("")
++        lines.append(f"--- 已知良性（不阻断，{n_benign} 条）---")
++        fam_stats: dict[str, list] = {}   # 族 -> [条数, 理由]
++        for issue in benign:
++            entry = fam_stats.setdefault(
++                _port_family(issue.port), [0, issue.benign_reason]
++            )
++            entry[0] += 1
++            if not entry[1]:
++                entry[1] = issue.benign_reason
++        for fam, (cnt, reason) in sorted(
++            fam_stats.items(), key=lambda kv: (-kv[1][0], kv[0])
++        ):
++            lines.append(f"  {fam}: {cnt} 条 —— {reason}")
++
+     if not selected:
+         lines.append("")
+-        lines.append(
+-            f"severity={sev_filter} 下没有问题；全量报告共 {len(report.issues)} 条，"
+-            f"已隐藏 {hidden} 条其它级别问题。用 severity=all 看全部。"
+-        )
++        if benign_hidden:
++            lines.append(
++                f"明细段没有可显示的条目：{benign_hidden} 条已知良性被 "
++                "show_benign=False 隐藏"
++                + (f"，另有 {hidden} 条其它级别问题被 severity={sev_filter} 隐藏"
++                   if hidden else "")
++                + "；用 show_benign=True 或 severity=all 看全量。"
++            )
++        else:
++            lines.append(
++                f"severity={sev_filter} 下没有问题；全量报告共 {len(report.issues)} 条，"
++                f"已隐藏 {hidden} 条其它级别问题。用 severity=all 看全部。"
++            )
+         return "\n".join(lines).rstrip()
+ 
+-    # --- 第二段：明细（受 max_items 预算约束，按 error → warning → info 顺序）---
++    # --- 第三段：明细（受 max_items 预算约束，按 error → warning → info 顺序）---
+     limit = max(0, int(max_items))
+     shown = 0
+     total = len(selected)
+@@ -462,11 +612,12 @@ def format_lint_report(
+             if limit and shown >= limit:
+                 break
+             file_name = Path(issue.file).name
+-            lines.append(f"  [{issue.rule}] {file_name}:{issue.line}")
++            mark = "  [known-benign]" if issue.benign else ""
++            lines.append(f"  [{issue.rule}] {file_name}:{issue.line}{mark}")
+             lines.append(f"    {issue.message}")
+             shown += 1
+ 
+-    # 第三段：被预算 / 级别过滤挡掉多少，明写出来（不静默截断）
++    # 第四段：被预算 / 级别过滤 / show_benign 挡掉多少，明写出来（不静默截断）
+     lines.append("")
+     if sev_filter != "all":
+         lines.append(
+@@ -478,5 +629,10 @@ def format_lint_report(
+             f"还有 {total - shown} 条未显示（max_items={limit}），"
+             "用 max_items=0 看全部。"
+         )
++    if benign_hidden:
++        lines.append(
++            f"（show_benign=False：明细已隐藏 {benign_hidden} 条已知良性条目；"
++            f"表头计数与「已知良性」段仍为全量 {n_benign} 条）"
++        )
+ 
+     return "\n".join(lines).rstrip()
+--- a/vivado_mcp/tools/diagnostic_tools.py
++++ b/vivado_mcp/tools/diagnostic_tools.py
+@@ -644,6 +644,8 @@ async def xdc_lint(
+     xdc_paths: list[str] | None = None,
+     severity: str = "all",
+     max_items: int = 0,
++    benign_allowlist: list[str] = [],
++    show_benign: bool = True,
+     session_id: str = "default",
+     ctx: Context = None,
+ ) -> str:
+@@ -656,7 +658,15 @@ async def xdc_lint(
+     - CLOCK_NO_PERIOD:create_clock 缺 -period
+     - PIN_CONFLICT_CROSS_FILE:多个 XDC 文件间的引脚冲突
+ 
+-    **输出分三段**:按规则聚合的摘要(全量,不受 max_items 影响)→ 明细 → 若显式
++    **已知良性族(GT 参考时钟 / MIG-DDR 引脚)**:这两类端口的 IOSTANDARD 本就
++    由别处提供 —— GT 参考时钟按 MGTREFCLK 用法不需要 IOSTANDARD(PITFALLS #20),
++    DDR4 的 IOSTANDARD 由 MIG 生成的 XDC 提供、顶层 XDC 只给 PACKAGE_PIN 是既有
++    约定。这类 ``MISSING_IOSTANDARD`` 照报不误(条数、行号一条不少),但标成
++    ``[known-benign]``、单列「已知良性(不阻断)」段,只从「阻断判定」里剔除。
++    别处同理的族可用 ``benign_allowlist`` 追加,不必改源码。
++
++    **输出分四段**:表头(含良性计数 +「阻断判定」一行)→ 按规则聚合的摘要
++    (全量,不受 max_items 影响)→「已知良性」按端口族聚合段 → 明细;若显式
+     传了 max_items 则截断并明写「还有 N 条未显示」。
+ 
+     **默认全量(``max_items=0``)**:检查类工具的首要职责是让调用方拿到完整工程细节,
+@@ -672,6 +682,12 @@ async def xdc_lint(
+             注意表头计数永远是全量的,过滤只影响明细。
+         max_items: 明细分条上限。``0``(默认)= 不限、全量输出;传正数才截断,
+             截断时会明写还剩多少条。
++        benign_allowlist: 追加的「已知良性」端口族 / glob 模式,如
++            ``["c0_ddr4_*", "mig_*", "gt_refclk_*"]``,命中同样标良性。
++            大小写不敏感,可匹配原始端口名或归一后的端口族名(``c0_ddr4_dq``)。
++            只影响 benign 标注,不减少问题条数;默认空 = 只用内置表。
++        show_benign: ``True``(默认)明细照列良性条目;``False`` 明细段不列,
++            但表头良性计数与「已知良性」段仍是全量,并明写「已隐藏 N 条」。
+         session_id: 目标会话 ID(仅在不传 xdc_paths 时使用)。
+     """
+     if severity not in ("all", "error", "warning"):
+@@ -694,8 +710,15 @@ async def xdc_lint(
+     if not xdc_paths:
+         return "项目未添加任何 XDC 约束文件,没什么可检查的。"
+ 
+-    report = lint_xdc_files(list(xdc_paths))
+-    return format_lint_report(report, severity=severity, max_items=max_items)
++    report = lint_xdc_files(
++        list(xdc_paths), benign_allowlist=list(benign_allowlist or [])
++    )
++    return format_lint_report(
++        report,
++        severity=severity,
++        max_items=max_items,
++        show_benign=show_benign,
++    )
+ 
+ 
+ @mcp.tool()

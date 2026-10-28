@@ -1,10 +1,10 @@
 ---
 name: hw-vio-debug
-description: "Interact with VIO debug cores via vivado-mcp or chipscope-mcp. Read input probes, drive output probes, monitor activity, and reset outputs. vivado-mcp supports all device families. chipscope-mcp supports Versal only. Use when user asks to \"read VIO inputs\", \"drive VIO output\", \"assert <signal> via VIO\", \"check signal activity\", \"what is the value of <signal>\", or \"monitor <probe>\". 本工作区注（2026-10-24 修订）：vivado-mcp 已配置为 mcp__vivado__*（32 工具，需重启宿主后生效）；当前会话若工具清单里没有 mcp__vivado__ 前缀，则走 <vivado-mcp>/mcp_ctl.py CLI 桥或 Vivado batch Tcl（详见文首本机适配注记）。"
+description: "Interact with VIO debug cores via vivado-mcp or chipscope-mcp. Read input probes, drive output probes, monitor activity, and reset outputs. vivado-mcp supports all device families. chipscope-mcp supports Versal only. Use when user asks to \"read VIO inputs\", \"drive VIO output\", \"assert <signal> via VIO\", \"check signal activity\", \"what is the value of <signal>\", or \"monitor <probe>\". 本工作区注（2026-10-24 修订）：vivado-mcp 按 kit 预设挂为 mcp__vivado__*（工具数一律以**该会话自己的工具清单**为准，不要按文档断言；改了预设要重启宿主才生效）；当前会话若工具清单里没有 mcp__vivado__ 前缀，则走 <vivado-mcp>/mcp_ctl.py CLI 桥或 Vivado batch Tcl（详见文首本机适配注记）。"
 license: MIT
 compatibility: Requires Vivado 2026.1+, hardware with a VIO core, and access to either vivado-mcp or chipscope-mcp.
 metadata:
-  version: "1.2.2"
+  version: "1.2.3"
   stage: beta
 baseline:
   amd_doc: "2026.1"
@@ -24,6 +24,7 @@ artifacts:
 > - 版本事实：Vivado **2023.1**（官方基线 2026.1）；Python 用 `<python 解释器：见 config.yml 的 python（install.ps1 写入实际值）>`。
 > - 文档检索：本机无 `vivado_doc_search`，改用 `web_fetch`（docs.amd.com / 官方 docs）或本项目 `<project_root>\docs`。
 > - 硬约束：MCP 安装路径必须纯 ASCII（中文路径经 Vivado Tcl GBK 解码会坏）；客户端必须**显式**设 `PYTHONPATH=<vivado-mcp>\site`，否则 venv 的 `_mcp_pilot_paths.pth` 会命中 `.mcp-pilot` 中文路径副本，导致 `start_session` 静默失败；Vivado 会话与综合/实现/仿真全局串行。
+> - **板卡不在场时**：本技能正文假设「有 live session + 真板」。无板时**不要**照下面的方法步骤硬跑，改走 `vivado-workflow-discipline` 技能 §8（dry-run 只落 `.tmp`、复用既有 `.ltx` / CSV 只做离线解包、按离线口径措辞）；本文件的官方方法步骤不因此改动。
 
 <!--
 Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.

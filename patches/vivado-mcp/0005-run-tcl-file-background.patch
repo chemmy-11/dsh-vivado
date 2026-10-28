@@ -1,0 +1,1248 @@
+--- a/vivado_mcp/tools/tcl_tools.py
++++ b/vivado_mcp/tools/tcl_tools.py
+@@ -12,16 +12,30 @@
+ 向后兼容）：Vivado 的原始 stdout 很容易一次几千 tokens，裁剪只保留末 N 行，
+ 但 ``ERROR`` / ``CRITICAL WARNING`` / ``警告`` 行无论落在窗口内外都不会丢
+ （坑 #69：只看传输层 isError 会把失败当成功，裁剪更不能吞错误）。
++
++``run_tcl`` 另外支持把 **Tcl 脚本文件**交给「脱离进程树」的 Vivado batch 跑
++（``script_path`` / ``background`` / ``job_id``）：会话内的阻塞命令一旦超时，整个
++会话就被这条在途命令占住，下一条命令直接被拒「上一条命令仍在执行」（坑 #77，实测
++5 s 超时后 20 s 命令仍在跑）；长脚本必须走独立进程，且不能被 MCP server 的退出
++或 ^C 带走。``stdout_tail_bytes`` 则是「按末尾 N 字节」裁剪会话内输出（UTF-8 边界
++安全），与 ``max_lines`` 的车道互不干扰，默认 0 时行为与旧版逐字节一致。
+ """
+ 
+ from __future__ import annotations
+ 
+ import asyncio
++import datetime
++import json
+ import os
+ import re
++import subprocess
++import sys
++import tempfile
++import time
+ 
+ from mcp.server.mcpserver import Context
+ 
++from vivado_mcp.config import find_vivado
+ from vivado_mcp.server import _NO_SESSION, _require_session, _safe_execute, mcp
+ from vivado_mcp.vivado.tcl_utils import tcl_quote
+ 
+@@ -121,6 +135,80 @@ def truncate_output(
+     return "\n".join(out)
+ 
+ 
++def _utf8_boundary(raw: bytes, start: int) -> int:
++    """把 start 前移到 UTF-8 字符边界（跳过 ``10xxxxxx`` 续字节）。
++
++    末尾 N 字节裁剪的切点几乎必然落在某个字符中间；前移到下一个字符起点后，
++    ``raw[start:]`` 保证是合法 UTF-8，不会切出半个汉字（坑 #78）。
++    """
++    while start < len(raw) and (raw[start] & 0xC0) == 0x80:
++        start += 1
++    return start
++
++
++def truncate_tail_bytes(
++    text: str,
++    tail_bytes: int = 0,
++    notes: tuple[str, ...] = (),
++) -> str:
++    """按**末尾 N 字节**裁剪输出（UTF-8 边界安全 + 关键行不丢）。
++
++    Args:
++        text: 原始输出文本。
++        tail_bytes: >0 时只保留末尾这么多字节；<=0 不裁剪（默认，向后兼容）。
++        notes: 追加在返回文本末尾的附加提示。
++
++    Returns:
++        裁剪后的文本。未裁剪时与 text 完全一致（除非给了 notes）。
++
++    与 ``truncate_output``（按行裁剪）互不替代：字节窗口更贴近「日志尾部」这个
++    真实需求（一行可能上千字符，按行裁根本压不住），但同样遵守坑 #69 的红线——
++    ``^\\s*(ERROR|CRITICAL WARNING|警告)`` 行即使落在窗口外也会在尾部「关键行」
++    小节补回，绝不因为裁剪把失败伪装成成功。
++    """
++    n = int(tail_bytes or 0)
++    if n <= 0:
++        tail = list(notes)
++        return text + ("\n".join([""] + tail) if tail else "")
++
++    raw = text.encode("utf-8")
++    total = len(raw)
++    if total <= n:
++        # 原文比窗口还短：不裁剪，但保留提示（调用方给了 stdout_tail_bytes 也要能看见）
++        tail = list(notes)
++        return text + ("\n".join([""] + tail) if tail else "")
++
++    start = _utf8_boundary(raw, total - n)
++    kept_raw = raw[start:]
++    kept = kept_raw.decode("utf-8")
++    # 头部末行可能被字节窗口切成半行，它的尾部已经在 kept 里，列关键行时排除
++    head_lines = raw[:start].decode("utf-8", errors="replace").splitlines()
++    if start > 0 and raw[start - 1] != 0x0A and head_lines:
++        head_lines = head_lines[:-1]
++
++    n_err, n_cw, n_cn = _count_key_lines(text.splitlines())
++    summary = (
++        f"[截断] 原文 {total} 字节 → 仅显示末尾 {n} 字节"
++        f"（stdout_tail_bytes={n}，实际保留 {len(kept_raw)} 字节）；"
++        f"全文 ERROR {n_err} 条 / CRITICAL WARNING {n_cw} 条"
++    )
++    if n_cn:
++        summary += f" / 警告 {n_cn} 条"
++
++    out: list[str] = [summary, kept]
++    outside = [ln for ln in head_lines if CRITICAL_LINE_RE.match(ln)]
++    if outside:
++        out.append("")
++        out.append(f"--- 关键行（不在末尾 {n} 字节窗口内，共 {len(outside)} 条）---")
++        out.extend(f"  {ln.strip()}" for ln in outside)
++
++    tail = list(notes)
++    if tail:
++        out.append("")
++        out.extend(tail)
++    return "\n".join(out)
++
++
+ # --------------------------------------------------------------------------- #
+ #  执行 + 统一后处理
+ # --------------------------------------------------------------------------- #
+@@ -149,6 +237,986 @@ def _maybe_append_quote_hint(text: str, failed: bool) -> str:
+     return f"{text}\n{_QUOTE_TRAP_HINT}"
+ 
+ 
++# --------------------------------------------------------------------------- #
++#  脱离进程树的 batch 作业（script_path / background / job_id）
++# --------------------------------------------------------------------------- #
++#
++# 为什么必须是「脱离进程树」而不是 asyncio 子进程：
++#   会话内的命令超时只是 MCP 停止等待，Vivado 侧还在跑，且会话被在途命令占住
++#   （坑 #77：超时后下一条命令直接被拒「上一条命令仍在执行」）。长脚本要跑几十分钟，
++#   而 MCP server 会随回合结束 / ^C / 重连退出——子进程一挂构建就没了。
++#   所以：写一个 ASCII 包装 .cmd → cmd.exe 以 DETACHED_PROCESS 启动 → Vivado batch
++#   的输出全部落文件 → 作业状态写 sidecar JSON（server 重启后仍能按 job_id 查回）。
++#
++# 批处理的硬约束（2026-10-25 实测踩过）：包装器里调用另一个 .bat **必须加 call**，
++# 否则控制权不返回，`.cmd` 里后面的 `echo %ERRORLEVEL%` 永远不执行、状态文件永不出现。
++
++_JOB_DEFAULT_TAIL_BYTES = 2000
++_JOB_POLL_INTERVAL = 0.5
++_JOB_INDEX_DIRNAME = "vivado_mcp_tcl_jobs"
++_JOB_ID_RE = re.compile(r"^tcljob-\d{8}-\d{6}-[0-9a-fA-F]{6}$")
++# 计划任务名（脱离式兜底用；job_id 唯一 ⇒ 任务名唯一，可确定性推导/幂等清理）
++_SCHTASKS_TASK_PREFIX = "dshvivado-tcljob-"
++
++# Windows 进程创建标志（stdlib subprocess 提供）
++_DETACHED_PROCESS = 0x00000008
++_CREATE_NEW_PROCESS_GROUP = 0x00000200
++# 父进程在 Job Object 里时，只有它能让我们逃出 job（且要求 job 允许 breakaway）
++_CREATE_BREAKAWAY_FROM_JOB = 0x01000000
++
++# 进程内缓存：{job_id: record}。server 重启后由 _resolve_job 从 sidecar 读回。
++_JOBS: dict[str, dict] = {}
++
++
++class _JobError(RuntimeError):
++    """作业启动前的校验失败；消息直接作为 ``[ERROR]`` 文本返回给调用方。"""
++
++
++def _now_iso() -> str:
++    """本地时间 ISO 字符串（秒精度，人眼可读，够排序）。"""
++    return datetime.datetime.now().isoformat(timespec="seconds")
++
++
++def _job_index_dir() -> str:
++    """跨进程/跨重启的 job_id 索引目录（TEMP 下，随 TEMP 环境变量走）。"""
++    d = os.path.join(tempfile.gettempdir(), _JOB_INDEX_DIRNAME)
++    os.makedirs(d, exist_ok=True)
++    return d
++
++
++def _read_json_file(path: str) -> dict | None:
++    """读 JSON 对象；文件不存在 / 半写 / 非对象一律返回 None（不抛）。"""
++    if not path:
++        return None
++    try:
++        with open(path, "r", encoding="utf-8") as f:
++            data = json.load(f)
++    except (OSError, ValueError):
++        return None
++    return data if isinstance(data, dict) else None
++
++
++def _write_job(record: dict) -> None:
++    """把作业记录写盘：canonical 状态文件（日志同目录）+ 索引副本，写失败不抛。"""
++    _JOBS[record["job_id"]] = record
++    index_path = os.path.join(_job_index_dir(), f"{record['job_id']}.job.json")
++    for path in (record.get("status_path") or "", index_path):
++        try:
++            parent = os.path.dirname(os.path.abspath(path))
++            if parent:
++                os.makedirs(parent, exist_ok=True)
++            tmp = path + ".tmp"
++            with open(tmp, "w", encoding="utf-8") as f:
++                json.dump(record, f, ensure_ascii=False, indent=1)
++            os.replace(tmp, path)
++        except OSError:
++            # 状态文件写不了不影响作业本身（进程已经在跑），只是查不了
++            continue
++
++
++def _resolve_job(job_id: str) -> dict | None:
++    """job_id → 作业记录：先内存缓存，再按索引文件 + canonical 状态文件读回。"""
++    jid = (job_id or "").strip()
++    if not _JOB_ID_RE.match(jid):
++        return None
++    record = _JOBS.get(jid) or _read_json_file(
++        os.path.join(_job_index_dir(), f"{jid}.job.json")
++    )
++    if record is None:
++        return None
++    canonical = record.get("status_path") or ""
++    fresh = _read_json_file(canonical) if canonical else None
++    record = fresh or record
++    _JOBS[jid] = record
++    return record
++
++
++def _read_tail(path: str, n_bytes: int) -> str:
++    """读文件末尾 n_bytes 字节（UTF-8 边界安全）；路径空 / 读不到返回空串。"""
++    if not path:
++        return ""
++    n = max(1, int(n_bytes or 0))
++    try:
++        with open(path, "rb") as f:
++            f.seek(0, os.SEEK_END)
++            size = f.tell()
++            f.seek(max(0, size - n))
++            raw = f.read()
++    except OSError:
++        return ""
++    return raw[_utf8_boundary(raw, 0):].decode("utf-8", errors="replace")
++
++
++def _process_state(pid: int) -> tuple[bool, int | None]:
++    """返回 ``(是否存活, 已退出时的退出码)``；只用 stdlib（ctypes / os.kill）。
++
++    Windows 走 ``OpenProcess + GetExitCodeProcess``：不引入 psutil 之类的依赖，
++    也不需要 tasklist 的文本输出（locale 一变就解析错）。
++    """
++    try:
++        pid = int(pid)
++    except (TypeError, ValueError):
++        return False, None
++    if pid <= 0:
++        return False, None
++
++    if sys.platform == "win32":
++        import ctypes
++
++        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
++        kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
++        kernel32.OpenProcess.restype = ctypes.c_void_p
++        kernel32.GetExitCodeProcess.argtypes = [
++            ctypes.c_void_p,
++            ctypes.POINTER(ctypes.c_uint32),
++        ]
++        kernel32.GetExitCodeProcess.restype = ctypes.c_int
++        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
++
++        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
++        STILL_ACTIVE = 259
++        ERROR_ACCESS_DENIED = 5
++        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
++        if not handle:
++            # 拿不到句柄：ACL 拒绝通常意味着「进程还在，只是不让我们问」；
++            # 进程真不存在时 GetLastError 是 87（Invalid Parameter）。
++            return ctypes.get_last_error() == ERROR_ACCESS_DENIED, None
++        try:
++            code = ctypes.c_uint32(0)
++            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
++                return False, None
++            if code.value == STILL_ACTIVE:
++                return True, None
++            return False, int(code.value)
++        finally:
++            kernel32.CloseHandle(handle)
++
++    try:
++        os.kill(pid, 0)
++        return True, None
++    except OSError:
++        return False, None
++
++
++def _read_rc(rc_path: str) -> int | None:
++    """读包装器写下的一行 ``!ERRORLEVEL!``；没落地 / 内容不像整数返回 None。"""
++    if not rc_path:
++        return None
++    try:
++        with open(rc_path, "r", encoding="utf-8", errors="replace") as f:
++            raw = f.read().strip()
++    except OSError:
++        return None
++    m = re.search(r"-?\d+", raw)
++    return int(m.group(0)) if m else None
++
++
++def _job_state(record: dict) -> tuple[str, int | None]:
++    """判定作业状态 → ``(status, exit_code)``，status ∈ running/finished/failed/unknown。
++
++    判据顺序（从最权威到兜底）：
++    1. ``.rc`` 文件（包装器在 Vivado 返回后立刻写，跨 server 重启仍然有效）；
++    2. sidecar JSON 里已落地的 ``exit_code``；
++    3. PID 存活（ctypes，无新依赖）；
++    4. schtasks 路径偶尔拿不到 PID（计划任务服务起进程，句柄不在我们手里）：
++       退回「计划任务定义是否还在」当存活判据；
++    5. 进程已退出但两条路都拿不到退出码 → ``unknown``（不猜成功）。
++    """
++    code = _read_rc(record.get("rc_path") or "")
++    if code is None and record.get("exit_code") is not None:
++        try:
++            code = int(record["exit_code"])
++        except (TypeError, ValueError):
++            code = None
++    if code is not None:
++        return ("finished" if code == 0 else "failed"), code
++
++    try:
++        pid = int(record.get("pid") or 0)
++    except (TypeError, ValueError):
++        pid = 0
++    if pid > 0:
++        alive, os_code = _process_state(pid)
++        if alive:
++            return "running", None
++        if os_code is not None:
++            return ("finished" if os_code == 0 else "failed"), os_code
++        return "unknown", None
++
++    # 没有 PID：只有 schtasks 路径会这样，用任务定义存在性判活
++    task_name = record.get("task_name") or ""
++    if record.get("launcher") == "schtasks" and task_name:
++        return ("running" if _task_exists(task_name) else "unknown"), None
++    return "unknown", None
++
++
++def _elapsed_seconds(record: dict) -> float:
++    """从 started_at 算到 finished_at（未结束则算到此刻）的秒数。"""
++    try:
++        started = datetime.datetime.fromisoformat(record.get("started_at") or "")
++    except (TypeError, ValueError):
++        return 0.0
++    finished_raw = record.get("finished_at")
++    try:
++        end = (
++            datetime.datetime.fromisoformat(finished_raw)
++            if finished_raw
++            else datetime.datetime.now()
++        )
++    except (TypeError, ValueError):
++        end = datetime.datetime.now()
++    return max(0.0, (end - started).total_seconds())
++
++
++def _last_log_line(record: dict) -> str:
++    """日志最后一个非空行（落地时记进 sidecar 的 marker 行，便于人眼比对）。"""
++    for key in ("log", "console"):
++        text = _read_tail(record.get(key) or "", 4096)
++        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
++        if lines:
++            return lines[-1]
++    return ""
++
++
++def _finalize_job(record: dict, status: str, code: int | None) -> dict:
++    """把终态写回记录 + sidecar（只落地一次，避免每次查询都重写文件）。
++
++    **查询必须只读**：这里不再删计划任务、不杀进程。schtasks 路径的任务清理由包装器
++    的最后一行负责（它删自己的任务；任务是一次性过期触发器，永远不会按计划自触发）。
++    """
++    if record.get("exit_code") is not None and record.get("finished_at"):
++        return record
++    record["status"] = status
++    record["exit_code"] = code
++    record["finished_at"] = _now_iso()
++    record["log_marker"] = _last_log_line(record)
++    _write_job(record)
++    return record
++
++
++def _job_meta_lines(record: dict) -> list[str]:
++    """作业的元信息行（不含状态/耗时，那两行由调用方按场景写）。"""
++    launcher = record.get("launcher") or "popen"
++    lines = [
++        f"job_id: {record.get('job_id')}",
++        f"pid: {record.get('pid')}",
++        f"启动方式: {launcher}",
++    ]
++    if launcher == "schtasks":
++        lines.append(f"计划任务: {record.get('task_name')}")
++    lines.extend(
++        [
++            f"脚本: {record.get('script')}",
++            f"日志: {record.get('log')}",
++            f"控制台: {record.get('console')}",
++            f"状态文件: {record.get('status_path')}",
++            f"Vivado: {record.get('vivado')}",
++        ]
++    )
++    return lines
++
++
++def _transport_note(record: dict) -> list[str]:
++    """启动方式不是 popen 时说清楚为什么换了（用户会疑惑 pid 不是 server 的子进程）。"""
++    launcher = record.get("launcher") or "popen"
++    if launcher in ("wmi-com", "wmi-cim"):
++        via = "老式 COM（[wmiclass]'Win32_Process'.Create）" if launcher == "wmi-com" else "CIM（Invoke-CimMethod）"
++        return [
++            f"说明: MCP server 所在的 Job Object 设了 KILL_ON_JOB_CLOSE（Popen 出去的子进程会"
++            f"随宿主一起被回收），已改用 WMI {via} 让 WmiPrvSE 创建构建进程——"
++            "它不是该 job 的成员，server 退出/断开都杀不到它。",
++        ]
++    if launcher == "schtasks":
++        return [
++            "说明: 前序脱离手段都失败，最后用了计划任务兜底。**⚠ 长构建勿用**：schtasks 新建的"
++            "任务默认带 IdleSettings{Duration=PT10M, StopOnIdleEnd=true}，机器空闲 10 分钟会把"
++            "任务实例停掉（实测 34 分钟 impl 段在 9m20s 被静默杀、无 rc）；作业结束后任务会自行删除。",
++        ]
++    return []
++
++
++def _tail_section(record: dict, tail_bytes: int) -> list[str]:
++    """日志尾部小节：优先 Vivado 的 -log 文件，没有内容就退回包装器控制台输出。"""
++    n = int(tail_bytes or 0)
++    if n <= 0:
++        n = _JOB_DEFAULT_TAIL_BYTES
++    for key in ("log", "console"):
++        path = record.get(key) or ""
++        text = _read_tail(path, n)
++        if text.strip():
++            return [f"--- 日志尾部（{path}，末 {n} 字节）---", text.rstrip()]
++    return ["--- 日志尾部: 日志/控制台暂时为空或尚未生成 ---"]
++
++
++def _batch_path_problem(path: str) -> str:
++    """检查路径能否安全写进 .cmd；返回问题描述，没问题返回空串。
++
++    包装器 .cmd 的内容必须是纯 ASCII，且不能含批处理元字符——中文路径会被
++    cmd.exe 按 OEM 代码页吃掉（中文工程路径正是 start_session 必失败的同族坑）。
++    """
++    if not path:
++        return "空路径"
++    try:
++        path.encode("ascii")
++    except UnicodeEncodeError:
++        return "含非 ASCII 字符（批处理/控制台代码页会破坏它）"
++    for ch in '!%^&|<>"':
++        if ch in path:
++            return f"含批处理元字符 {ch!r}"
++    return ""
++
++
++def _read_text(path: str) -> str:
++    """读 ASCII 小文件；读不到返回空串（状态查询用，绝不抛）。"""
++    try:
++        with open(path, "r", encoding="utf-8", errors="replace") as f:
++            return f.read()
++    except OSError:
++        return ""
++
++
++def _process_in_any_job() -> bool:
++    """当前进程是否在某个 Job Object 里（只判断「在不在」，不关心是谁的 job）。
++
++    仅用于诊断/日志：Windows 上几乎什么都在某个 job 里（Task Scheduler 起的进程也在
++    计划任务服务的 job 里），所以「在 job 里」本身不是危险信号。
++    """
++    if sys.platform != "win32":
++        return False
++    import ctypes
++
++    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
++    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
++    kernel32.IsProcessInJob.argtypes = [
++        ctypes.c_void_p,
++        ctypes.c_void_p,
++        ctypes.POINTER(ctypes.c_int),
++    ]
++    kernel32.IsProcessInJob.restype = ctypes.c_int
++    result = ctypes.c_int(0)
++    ok = kernel32.IsProcessInJob(kernel32.GetCurrentProcess(), None, ctypes.byref(result))
++    return bool(ok) and bool(result.value)
++
++
++def _job_kills_on_close() -> bool:
++    """本进程所在的 Job Object 是否设了 ``JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE``。
++
++    只有这种 job 才会在宿主关闭时**连带杀掉**我们 Popen 出去的孙子进程——这才是
++    需要走 Task Scheduler 逃生的判据（单纯「在某个 job 里」不影响脱离）。
++
++    MCP 官方 Python SDK 的 ``stdio_client`` 就给 server 进程建这种 job
++    （``mcp/os/win32/utilities.py``：``LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE``），
++    实测真 Vivado 的 2 分钟 batch 在 server 退出后 1.8 s 被杀。
++    """
++    if sys.platform != "win32":
++        return False
++    import ctypes
++
++    class _BasicLimit(ctypes.Structure):
++        _fields_ = [
++            ("PerProcessUserTimeLimit", ctypes.c_int64),
++            ("PerJobUserTimeLimit", ctypes.c_int64),
++            ("LimitFlags", ctypes.c_uint32),
++            ("MinimumWorkingSetSize", ctypes.c_size_t),
++            ("MaximumWorkingSetSize", ctypes.c_size_t),
++            ("ActiveProcessLimit", ctypes.c_uint32),
++            ("Affinity", ctypes.c_size_t),
++            ("PriorityClass", ctypes.c_uint32),
++            ("SchedulingClass", ctypes.c_uint32),
++        ]
++
++    class _IoCounters(ctypes.Structure):
++        _fields_ = [
++            ("ReadOperationCount", ctypes.c_uint64),
++            ("WriteOperationCount", ctypes.c_uint64),
++            ("OtherOperationCount", ctypes.c_uint64),
++            ("ReadTransferCount", ctypes.c_uint64),
++            ("WriteTransferCount", ctypes.c_uint64),
++            ("OtherTransferCount", ctypes.c_uint64),
++        ]
++
++    class _ExtendedLimit(ctypes.Structure):
++        _fields_ = [
++            ("BasicLimitInformation", _BasicLimit),
++            ("IoInfo", _IoCounters),
++            ("ProcessMemoryLimit", ctypes.c_size_t),
++            ("JobMemoryLimit", ctypes.c_size_t),
++            ("PeakProcessMemoryUsed", ctypes.c_size_t),
++            ("PeakJobMemoryUsed", ctypes.c_size_t),
++        ]
++
++    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
++    kernel32.QueryInformationJobObject.argtypes = [
++        ctypes.c_void_p,
++        ctypes.c_int,
++        ctypes.c_void_p,
++        ctypes.c_uint32,
++        ctypes.POINTER(ctypes.c_uint32),
++    ]
++    kernel32.QueryInformationJobObject.restype = ctypes.c_int
++    info = _ExtendedLimit()
++    returned = ctypes.c_uint32(0)
++    # JobObjectExtendedLimitInformation == 9；hJob=NULL ⇒ 查本进程所在 job（Windows 8+
++    # 嵌套 job 时返回最内层那个）
++    ok = kernel32.QueryInformationJobObject(
++        None, 9, ctypes.byref(info), ctypes.sizeof(info), ctypes.byref(returned)
++    )
++    if not ok:
++        return False  # 不在 job 里／查询失败 ⇒ 不会被连带回收
++    return bool(info.BasicLimitInformation.LimitFlags & 0x00002000)
++
++
++def _run_schtasks(args: list[str], timeout: float = 30.0) -> tuple[int, str]:
++    """跑 schtasks 并返回 ``(returncode, 合并输出)``；只判 returncode，不解析文案。
++
++    踩过的坑：``/st`` 早于当前时间时 schtasks 会在 **stderr** 打一行 WARNING，在
++    PowerShell 的 ``$ErrorActionPreference='Stop'`` 下会变成 terminating error 把
++    启动流程打断。这里直接 subprocess 采集，不存在该问题。
++    """
++    try:
++        completed = subprocess.run(
++            ["schtasks", *args],
++            stdin=subprocess.DEVNULL,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.STDOUT,
++            timeout=timeout,
++        )
++    except (OSError, subprocess.TimeoutExpired) as e:
++        return -1, f"schtasks {args[0] if args else ''} 调用失败: {e}"
++    text = (completed.stdout or b"").decode("mbcs", "replace")
++    return completed.returncode, text
++
++
++def _expired_task_dates() -> list[str]:
++    """过期一次性任务的 ``/sd`` 候选：优先 MM/DD/YYYY，其次 YYYY/MM/DD。
++
++    schtasks 的 ``/sd`` 跟随系统区域格式，猜错会 create 失败（returncode≠0），
++    所以两个都试一遍；一年前的日期让 ``Next Run Time`` 变成 N/A ⇒ 永远不会按
++    计划自触发，只能靠 ``/run`` 手动触发。
++    """
++    import datetime as _dt
++
++    d = _dt.date.today() - _dt.timedelta(days=365)
++    return [d.strftime("%m/%d/%Y"), d.strftime("%Y/%m/%d")]
++
++
++def _delete_task(task_name: str) -> None:
++    """幂等删任务（不存在也算成功）；清理残留用，绝不抛。"""
++    if not task_name:
++        return
++    _run_schtasks(["/delete", "/tn", task_name, "/f"], timeout=20.0)
++
++
++def _write_findpid_script(out_dir: str, job_id: str) -> str:
++    """写一个 ASCII 的 .ps1：按命令行里的 job_id 反查包装器 cmd.exe 的 PID。
++
++    为什么需要：Task Scheduler 的 ``/run`` 只回 "已尝试运行"，不给 PID；而构建进程
++    是 svchost(计划任务服务) 的子进程，我们拿不到句柄。``Get-CimInstance`` 查询在
++    本机实测正常（只有 ``Win32_Process.Create`` 这个 provider 挂了），所以按
++    CommandLine 里唯一的 job_id 反查是最稳的办法。
++    """
++    path = os.path.join(out_dir, f"{job_id}.findpid.ps1")
++    script = "\r\n".join(
++        [
++            "param([string]$JobId, [string]$OutFile)",
++            "$p = Get-CimInstance Win32_Process -Filter \"Name='cmd.exe'\" |",
++            "     Where-Object { $_.CommandLine -like ('*' + $JobId + '*') } |",
++            "     Select-Object -First 1",
++            'if ($p) { "PID=$($p.ProcessId)" | Out-File -Encoding ascii -NoNewline $OutFile }',
++            'else { "PID=0" | Out-File -Encoding ascii -NoNewline $OutFile }',
++            "",
++        ]
++    )
++    try:
++        with open(path, "w", encoding="ascii", newline="") as f:
++            f.write(script)
++    except OSError:
++        return ""
++    return path
++
++
++def _find_job_pid(job_id: str, out_dir: str) -> int:
++    """按 job_id 反查包装器 PID；找不到返回 0（最多等约 6 秒）。"""
++    script = _write_findpid_script(out_dir, job_id)
++    if not script:
++        return 0
++    result_path = os.path.join(out_dir, f"{job_id}.pid.txt")
++    args = [
++        "powershell.exe",
++        "-NoProfile",
++        "-NonInteractive",
++        "-ExecutionPolicy",
++        "Bypass",
++        "-File",
++        script,
++        "-JobId",
++        job_id,
++        "-OutFile",
++        result_path,
++    ]
++    for attempt in range(12):
++        try:
++            subprocess.run(
++                args,
++                stdin=subprocess.DEVNULL,
++                stdout=subprocess.DEVNULL,
++                stderr=subprocess.DEVNULL,
++                timeout=30,
++            )
++        except (OSError, subprocess.TimeoutExpired):
++            return 0
++        match = re.search(r"PID=(\d+)", _read_text(result_path))
++        if match and int(match.group(1)) > 0:
++            return int(match.group(1))
++        time.sleep(0.5 if attempt else 0.2)
++    return 0
++
++
++def _write_wmi_script(out_dir: str, job_id: str, mode: str) -> str:
++    """写 ASCII 的 WMI 启动器（``mode="com"`` 老式 COM / ``mode="cim"`` Invoke-CimMethod）。
++
++    为什么必须落成 ``.ps1`` + ``powershell -File``：``[wmiclass]'Win32_Process'.Create()``
++    走 DCOM/vtable，由 **WmiPrvSE.exe** 创建进程 ⇒ 天然不在调用方的 Job Object 里；
++    而 ``-Command`` 内联串要过 cmd/PowerShell 两层引号，实测会把 CommandLine 参数切坏
++    （Create 返回 RV=8，30 s 后才失败）。COM 与 CIM 是两条不同的 provider 路径：
++    本机 CIM(``Invoke-CimMethod``) 恒 RV=8，COM 可用。
++    """
++    path = os.path.join(out_dir, f"{job_id}.wmi_{mode}.ps1")
++    if mode == "com":
++        body = [
++            "param([string]$CommandLine, [string]$CurrentDir)",
++            "$ErrorActionPreference = 'Stop'",
++            "try {",
++            "  $si = ([wmiclass]'Win32_ProcessStartup').CreateInstance()",
++            "  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: no console window, own process group",
++            "  $si.CreateFlags = 0x208",
++            "  $r = ([wmiclass]'Win32_Process').Create($CommandLine, $CurrentDir, $si)",
++            "  if ($r.ReturnValue -ne 0) {",
++            "    $r = ([wmiclass]'Win32_Process').Create($CommandLine, $CurrentDir, $null)",
++            "  }",
++            '  "COM_RV=$($r.ReturnValue) COM_PID=$($r.ProcessId)"',
++            "} catch {",
++            '  "COM_RV=ERR COM_PID=0 MSG=$($_.Exception.Message)"',
++            "}",
++        ]
++    else:
++        body = [
++            "param([string]$CommandLine, [string]$CurrentDir)",
++            "$ErrorActionPreference = 'Stop'",
++            "try {",
++            "  $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$CommandLine; CurrentDirectory=$CurrentDir}",
++            '  "CIM_RV=$($r.ReturnValue) CIM_PID=$($r.ProcessId)"',
++            "} catch {",
++            '  "CIM_RV=ERR CIM_PID=0 MSG=$($_.Exception.Message)"',
++            "}",
++        ]
++    try:
++        with open(path, "w", encoding="ascii", newline="") as f:
++            f.write("\r\n".join(body) + "\r\n")
++    except OSError as e:
++        raise _JobError(f"无法写 WMI 启动器 {path}: {e}") from None
++    return path
++
++
++def _spawn_via_wmi(
++    cmd_path: str, workdir: str, out_dir: str, job_id: str, mode: str
++) -> int:
++    """用 WMI（com 优先 / cim 兜底）启动包装器，返回包装器 PID。
++
++    进程由 WmiPrvSE 创建 ⇒ Job Object 成员资格继承自 WmiPrvSE（不是我们），宿主的
++    ``TerminateJobObject`` / KILL_ON_JOB_CLOSE 打不到它（实测：helper 在 kill-on-close
++    job 里用 COM 起的目标进程，关 job 句柄后 +5/+15/+30 s 仍存活）。
++    """
++    script = _write_wmi_script(out_dir, job_id, mode)
++    cmd_line = f'cmd.exe /c "{os.path.normpath(cmd_path)}"'
++    args = [
++        "powershell.exe",
++        "-NoProfile",
++        "-NonInteractive",
++        "-ExecutionPolicy",
++        "Bypass",
++        "-File",
++        script,
++        "-CommandLine",
++        cmd_line,
++        "-CurrentDir",
++        os.path.normpath(workdir),
++    ]
++    try:
++        completed = subprocess.run(
++            args,
++            stdin=subprocess.DEVNULL,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE,
++            timeout=120,
++        )
++    except (OSError, subprocess.TimeoutExpired) as e:
++        raise _JobError(f"powershell 调用失败（wmi-{mode}）: {e}") from None
++
++    tag = "COM" if mode == "com" else "CIM"
++    text = (completed.stdout or b"").decode("utf-8", "replace")
++    rv_match = re.search(rf"{tag}_RV=(-?\d+)", text)
++    pid_match = re.search(rf"{tag}_PID=(\d+)", text)
++    if not rv_match:
++        stderr_text = (completed.stderr or b"").decode("utf-8", "replace").strip()
++        raise _JobError(
++            f"wmi-{mode} 没有返回 {tag}_RV（stdout={text.strip()[:150] or '空'}；"
++            f"stderr={stderr_text[:150] or '空'}）"
++        )
++    rv = int(rv_match.group(1))
++    pid = int(pid_match.group(1)) if pid_match else 0
++    if rv != 0 or pid <= 0:
++        msg_match = re.search(r"MSG=(.*)", text)
++        detail = msg_match.group(1).strip()[:150] if msg_match else ""
++        raise _JobError(f"wmi-{mode} 的 Win32_Process.Create 返回 RV={rv} PID={pid} {detail}")
++    return pid
++
++
++def _spawn_via_schtasks(task_name: str, cmd_path: str, reason: str) -> None:
++    """用「已过期的一次性计划任务 + /run」启动包装器（最后兜底，长构建勿用）。
++
++    计划任务实例由 Task Scheduler 服务（svchost）创建 ⇒ 也不在调用方 job 里。但
++    **schtasks 建的默认任务带 IdleSettings{Duration=PT10M, StopOnIdleEnd=true}**：
++    机器空闲 10 分钟就会停掉任务实例 —— 实测 34 分钟的 impl 段跑到 9m20s 被静默杀掉
++    （无 rc、日志停在 place_design Phase 3.2）。所以它只作最后兜底，长构建优先 WMI。
++    """
++    last_text = ""
++    created = False
++    for date_str in _expired_task_dates():
++        rc, text = _run_schtasks(
++            [
++                "/create",
++                "/tn",
++                task_name,
++                "/tr",
++                f'"{os.path.normpath(cmd_path)}"',
++                "/sc",
++                "once",
++                "/st",
++                "00:00",
++                "/sd",
++                date_str,
++                "/f",
++            ]
++        )
++        last_text = text
++        if rc == 0:
++            created = True
++            break
++    if not created:
++        raise _JobError(
++            f"计划任务创建失败（{reason}）：{last_text.strip()[:300] or '无输出'}"
++        )
++
++    rc, text = _run_schtasks(["/run", "/tn", task_name])
++    if rc != 0:
++        _delete_task(task_name)
++        raise _JobError(f"计划任务 /run 失败（{reason}）：{text.strip()[:300] or '无输出'}")
++
++
++def _task_exists(task_name: str) -> bool:
++    """任务定义是否还在（``/query`` 的 returncode 判据，无视本地化文案）。"""
++    if not task_name:
++        return False
++    rc, _text = _run_schtasks(["/query", "/tn", task_name], timeout=20.0)
++    return rc == 0
++
++
++def _launch_job(script_path: str, log_file: str = "") -> dict:
++    """校验 + 生成包装器 + 脱离进程树启动，返回作业记录（失败抛 _JobError）。
++
++    目录布局（log 同目录，ASCII）::
++
++        <out_dir>/<job_id>.cmd           包装器（ASCII / CRLF）
++        <out_dir>/<job_id>.rc            包装器写的 !ERRORLEVEL!（完成判据）
++        <out_dir>/<job_id>.job.json      状态文件（canonical sidecar）
++        <out_dir>/<job_id>.console.txt   Vivado 的 stdout+stderr 重定向
++        <stem>.vivado.log / .jou         Vivado 自己的 -log / -journal
++    """
++    script = os.path.abspath((script_path or "").strip())
++    if not os.path.isfile(script):
++        raise _JobError(
++            f"script_path 不存在或不是文件: {script_path!r}。"
++            "请传绝对路径（例如 D:/FPGA/scripts/run_impl.tcl），不要传 Tcl 命令文本。"
++        )
++
++    try:
++        vivado = find_vivado()
++    except FileNotFoundError as e:
++        raise _JobError(
++            f"找不到 Vivado 可执行文件：{e} 可设置 VIVADO_PATH 环境变量指向 vivado.bat。"
++        ) from None
++
++    workdir = os.path.abspath(os.getcwd())
++
++    # job_id 先定下来：日志/控制台文件名都带上它，同一脚本并发跑两次也不会互相覆盖
++    job_id = f"tcljob-{time.strftime('%Y%m%d-%H%M%S')}-{os.urandom(3).hex()}"
++
++    stem = os.path.splitext(os.path.basename(script))[0]
++    if (log_file or "").strip():
++        log_path = os.path.abspath(log_file.strip())
++        out_dir = os.path.dirname(log_path) or workdir
++        journal_path = (
++            log_path[:-4] + ".jou" if log_path.lower().endswith(".log") else log_path + ".jou"
++        )
++    else:
++        out_dir = os.path.dirname(script) or workdir
++        log_path = os.path.join(out_dir, f"{stem}.{job_id}.log")
++        journal_path = os.path.join(out_dir, f"{stem}.{job_id}.jou")
++    console_path = os.path.join(out_dir, f"{job_id}.console.txt")
++
++    try:
++        os.makedirs(out_dir, exist_ok=True)
++    except OSError as e:
++        raise _JobError(f"无法创建日志目录 {out_dir}: {e}") from None
++
++    status_path = os.path.join(out_dir, f"{job_id}.job.json")
++    rc_path = os.path.join(out_dir, f"{job_id}.rc")
++    cmd_path = os.path.join(out_dir, f"{job_id}.cmd")
++    # 计划任务名确定性可推导：job_id 唯一 ⇒ 任务名唯一；用于脱离式兜底与幂等清理
++    task_name = f"{_SCHTASKS_TASK_PREFIX}{job_id}"
++
++    problems = []
++    for label, path in (
++        ("当前工作目录(cwd)", workdir),
++        ("脚本", script),
++        ("日志目录", out_dir),
++        ("Vivado", vivado),
++    ):
++        why = _batch_path_problem(path)
++        if why:
++            problems.append(f"{label} {path} → {why}")
++    if problems:
++        raise _JobError(
++            "路径不能用于 batch 启动（要求纯 ASCII 且不含批处理元字符）："
++            + "；".join(problems)
++            + "。请把 Tcl 脚本与日志目录放到纯 ASCII 路径下。"
++        )
++
++    # 关键：调用另一个 .bat 必须 call，否则控制权不返回、rc 永不落地（实测踩过）
++    cmd_text = "\r\n".join(
++        [
++            "@echo off",
++            "setlocal EnableDelayedExpansion",
++            f'cd /d "{os.path.normpath(workdir)}"',
++            f'call "{os.path.normpath(vivado)}" -mode batch'
++            f' -source "{os.path.normpath(script)}" -notrace'
++            f' -log "{os.path.normpath(log_path)}"'
++            f' -journal "{os.path.normpath(journal_path)}"'
++            f' > "{os.path.normpath(console_path)}" 2>&1',
++            f'echo !ERRORLEVEL! > "{os.path.normpath(rc_path)}"',
++            # 必须最后一行：删除自己的计划任务会终止本任务实例，而 BUILD_EXIT 已经落盘。
++            # 任务不存在时 schtasks 返回非 0，直接丢弃输出即可（幂等）。
++            f'schtasks /delete /tn "{task_name}" /f >nul 2>&1',
++            "endlocal",
++            "",
++        ]
++    )
++    try:
++        with open(cmd_path, "w", encoding="ascii", newline="") as f:
++            f.write(cmd_text)
++    except OSError as e:
++        raise _JobError(f"无法写包装脚本 {cmd_path}: {e}") from None
++
++    popen_kwargs: dict = {
++        "cwd": workdir,
++        # 三个流全部不接管道：MCP server 退出 / ^C 都波及不到构建
++        "stdin": subprocess.DEVNULL,
++        "stdout": subprocess.DEVNULL,
++        "stderr": subprocess.DEVNULL,
++        "close_fds": True,
++    }
++    if sys.platform == "win32":
++        # DETACHED_PROCESS：不继承 server 的控制台/进程组；
++        # CREATE_NEW_PROCESS_GROUP：Ctrl 事件不投递到构建进程组；
++        # CREATE_BREAKAWAY_FROM_JOB：父进程在 Job Object 里时尝试脱离
++        #   （job 允许 breakaway 才行；不允许时 CreateProcess 直接 Errno 5）。
++        popen_kwargs["creationflags"] = (
++            _DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP | _CREATE_BREAKAWAY_FROM_JOB
++        )
++    pid = 0
++    launcher = ""
++    attempts: list[str] = []  # 每次尝试失败的原因，全挂时一起报给调用方
++
++    # ① Popen + DETACHED_PROCESS（不加 job / job 不连带杀人时最省事）
++    use_popen = not (sys.platform == "win32" and _job_kills_on_close())
++    if use_popen:
++        try:
++            proc = subprocess.Popen(["cmd.exe", "/c", cmd_path], **popen_kwargs)
++            pid, launcher = proc.pid, "popen"
++        except OSError as e:
++            if sys.platform != "win32":
++                raise _JobError(f"启动 cmd 包装器失败: {e}") from None
++            attempts.append(f"popen 被拒: {e}")
++    else:
++        # 所在的 job 设了 KILL_ON_JOB_CLOSE（MCP 官方 Python SDK 客户端就是这样）：
++        # 即使 Popen 带 CREATE_BREAKAWAY_FROM_JOB 成功返回，子进程仍留在 job 链里——
++        # 实测 server 退出后真 Vivado 的 2 分钟 batch 在 1.8 s 被杀。直接跳过。
++        attempts.append("popen 跳过: 所在 job 设了 KILL_ON_JOB_CLOSE，子进程会被连带回收")
++
++    # ② WMI-COM（[wmiclass]'Win32_Process'.Create）：进程由 WmiPrvSE 创建，天然在 job 外
++    if not launcher and sys.platform == "win32":
++        try:
++            pid = _spawn_via_wmi(cmd_path, workdir, out_dir, job_id, "com")
++            launcher = "wmi-com"
++        except _JobError as e:
++            attempts.append(str(e))
++
++    # ③ WMI-CIM（Invoke-CimMethod）：本机恒 RV=8，留作别的机器上的备选
++    if not launcher and sys.platform == "win32":
++        try:
++            pid = _spawn_via_wmi(cmd_path, workdir, out_dir, job_id, "cim")
++            launcher = "wmi-cim"
++        except _JobError as e:
++            attempts.append(str(e))
++
++    # ④ Task Scheduler 最后兜底（长构建勿用：默认 IdleSettings 会在空闲 10 分钟后停任务）
++    if not launcher:
++        try:
++            _spawn_via_schtasks(task_name, cmd_path, "；".join(attempts)[:260] or "前序启动均失败")
++            launcher = "schtasks"
++            pid = _find_job_pid(job_id, out_dir)
++        except _JobError as e:
++            attempts.append(str(e))
++            raise _JobError(
++                "脱离式启动全部失败：" + "；".join(a[:200] for a in attempts)
++            ) from None
++
++    record: dict = {
++        "job_id": job_id,
++        "pid": pid,
++        "launcher": launcher,
++        "task_name": task_name,
++        "status": "running",
++        "script": script,
++        "cwd": workdir,
++        "vivado": vivado,
++        "log": log_path,
++        "journal": journal_path,
++        "console": console_path,
++        "cmd": cmd_path,
++        "rc_path": rc_path,
++        "status_path": status_path,
++        "started_at": _now_iso(),
++        "finished_at": "",
++        "exit_code": None,
++        "log_marker": "",
++        "markers": {
++            "rc": os.path.basename(rc_path),
++            "status": os.path.basename(status_path),
++        },
++    }
++    _write_job(record)
++    return record
++
++
++async def _wait_job(record: dict, timeout: float) -> bool:
++    """轮询 sidecar 直到作业结束或到 timeout；返回 True 表示「超时但仍在跑」。
++
++    超时**不是失败**：作业还在后台跑，调用方拿 job_id 继续查（调用方可以随时
++    重连、重开 server，作业与它无关）。
++    """
++    deadline = time.monotonic() + max(0.0, float(timeout))
++    while True:
++        status, code = _job_state(record)
++        if status != "running":
++            _finalize_job(record, status, code)
++            return False
++        if time.monotonic() >= deadline:
++            return True
++        await asyncio.sleep(_JOB_POLL_INTERVAL)
++
++
++def _format_job_result(
++    record: dict, status: str, code: int | None, tail_bytes: int, timed_out: bool
++) -> str:
++    """把作业状态渲染成给人/给 AI 都读得懂的文本（程序化字段一行一个）。"""
++    jid = record.get("job_id")
++    elapsed = _elapsed_seconds(record)
++    if status == "running":
++        head = (
++            f"[RUNNING] Tcl 脚本仍在后台跑（pid {record.get('pid')} 存活），"
++            f"已耗时 {elapsed:.1f} s —— **这不是失败**，作业与 MCP 会话无关"
++        )
++        if timed_out:
++            head = (
++                f"[RUNNING] 已等待 {elapsed:.1f} s 仍未结束 —— **不是失败**；"
++                f"作业在后台继续跑，随时用 job_id 查"
++            )
++    elif status == "finished":
++        head = f"[OK] Tcl 脚本已跑完（退出码 0），总耗时 {elapsed:.1f} s"
++    elif status == "failed":
++        head = (
++            f"[ERROR] Tcl 脚本已退出但返回码非 0（退出码 {code}），"
++            f"总耗时 {elapsed:.1f} s —— 请看下方日志尾部"
++        )
++    else:
++        head = (
++            "[ERROR] 作业进程已退出，但没有拿到退出码（.rc / sidecar 都缺失），"
++            f"无法确认成败；耗时 {elapsed:.1f} s，请直接看日志"
++        )
++
++    lines = [head, *_job_meta_lines(record)]
++    if status == "running":
++        lines.extend(_transport_note(record))
++        lines.append(f"用法: run_tcl(job_id=\"{jid}\") 查状态（轮询不会打断它）")
++    else:
++        marker = record.get("log_marker") or ""
++        if marker:
++            lines.append(f"日志最后一行: {marker}")
++    lines.append("")
++    lines.extend(_tail_section(record, tail_bytes))
++    return "\n".join(lines)
++
++
++def _query_job_text(job_id: str, tail_bytes: int = 0) -> str:
++    """``run_tcl(job_id=...)`` 的实现：只读 sidecar + PID 存活，不碰会话。"""
++    jid = (job_id or "").strip()
++    record = _resolve_job(jid)
++    if record is None:
++        return (
++            f"[ERROR] 找不到作业 job_id={job_id!r}。"
++            f"已查内存缓存与索引目录 {_job_index_dir()}。"
++            "job_id 形如 tcljob-20261028-164500-1a2b3c（由 script_path/background=True 返回）。"
++        )
++    status, code = _job_state(record)
++    if status != "running":
++        _finalize_job(record, status, code)
++    return _format_job_result(record, status, code, tail_bytes, timed_out=False)
++
++
++async def _run_script_job(
++    script_path: str,
++    log_file: str,
++    background: bool,
++    timeout: float,
++    tail_bytes: int,
++) -> str:
++    """``run_tcl(script_path=...)`` 的实现：启动脱离式 batch（可选轮询到 timeout）。"""
++    try:
++        record = _launch_job(script_path, log_file)
++    except _JobError as e:
++        return f"[ERROR] {e}"
++
++    jid = record["job_id"]
++    if background:
++        lines = [
++            "[OK] 已在后台启动 Tcl 脚本（脱离进程树：MCP server 退出/回合结束/^C 都不影响它）",
++            "状态: running",
++            *_job_meta_lines(record),
++            *_transport_note(record),
++            f"用法: run_tcl(job_id=\"{jid}\") 查状态；日志由 Vivado 直接写 "
++            f"{record.get('log')}，可随时 tail",
++        ]
++        return "\n".join(lines)
++
++    timed_out = await _wait_job(record, max(0.0, float(timeout)))
++    status, code = _job_state(record)
++    if status != "running":
++        _finalize_job(record, status, code)
++    return _format_job_result(record, status, code, tail_bytes, timed_out=timed_out)
++
++
+ async def _render_result(
+     session,
+     tcl: str,
+@@ -156,14 +1224,19 @@ async def _render_result(
+     error_label: str,
+     max_lines: int,
+     save_full_to: str,
++    stdout_tail_bytes: int = 0,
+ ) -> tuple[str, bool]:
+     """执行 Tcl 并按需裁剪输出，返回 ``(返回文本, 是否失败)``。
+ 
+-    ``max_lines <= 0 且 save_full_to 为空`` 时**完全走原路径**（``_safe_execute``），
+-    保证默认行为逐字节不变；否则重新取未截断的原始输出，才能裁出真正的末尾 N 行
+-    （``TclResult.summary`` 超长时只保留前 50k 字符，尾部已经没了）。
++    ``max_lines <= 0 且 save_full_to 为空且 stdout_tail_bytes <= 0`` 时**完全走原
++    路径**（``_safe_execute``），保证默认行为逐字节不变；否则重新取未截断的原始
++    输出，才能裁出真正的末尾 N 行 / N 字节（``TclResult.summary`` 超长时只保留前
++    50k 字符，尾部已经没了）。
++
++    ``stdout_tail_bytes`` 与 ``max_lines`` 同时给出时：**先按末尾字节裁，再按行裁**，
++    两者都生效（先字节后行 = 取更严格者；两个摘要行都会写明各自裁掉了什么）。
+     """
+-    if max_lines <= 0 and not save_full_to:
++    if max_lines <= 0 and not save_full_to and int(stdout_tail_bytes or 0) <= 0:
+         text = await _safe_execute(session, tcl, timeout, error_label)
+         # summary 的失败标记就是前缀 "[ERROR] (rc=N)"（见 TclResult.summary）
+         return text, text.lstrip().startswith("[ERROR]")
+@@ -186,16 +1259,34 @@ async def _render_result(
+         notes.append(f"[失败] Tcl 返回码 rc={result.return_code}，请结合上方输出判断。")
+     if not payload.strip():
+         payload = _OK_NO_OUTPUT
++
++    tail_bytes = int(stdout_tail_bytes or 0)
++    if tail_bytes > 0:
++        # 字节窗口 + 行窗口各裁一刀：save_full_to 仍存**未裁剪**原文
++        trimmed = truncate_tail_bytes(payload, tail_bytes)
++        if save_full_to:
++            notes.append(_save_full_text(payload, save_full_to))
++        if max_lines > 0:
++            trimmed = truncate_output(trimmed, max_lines, "", tuple(notes))
++        elif notes:
++            trimmed += "\n" + "\n".join(notes)
++        return trimmed, failed
++
+     return truncate_output(payload, max_lines, save_full_to, tuple(notes)), failed
+ 
+ 
+ @mcp.tool()
+ async def run_tcl(
+-    command: str,
++    command: str = "",
+     session_id: str = "default",
+     timeout: int = 120,
+     max_lines: int = 0,
+     save_full_to: str = "",
++    script_path: str = "",
++    background: bool = False,
++    log_file: str = "",
++    stdout_tail_bytes: int = 0,
++    job_id: str = "",
+     ctx: Context = None,
+ ) -> str:
+     r"""执行任意 Vivado Tcl 命令。支持所有 Vivado Tcl API。
+@@ -314,14 +1405,22 @@ async def run_tcl(
+       - **wcfg 磁盘路径属性是 `FILE_PATH`**(不是 FILE_NAME,后者报 [Common 17-54]):
+         `get_property FILE_PATH [current_wave_config]`(MCP `set_wave_zoom` 改 zoom_setting 用此)。
+ 
++    **长脚本 / 会话超时陷阱（坑 #77）**：会话内的命令一旦超时，Vivado 侧仍在跑，且
++    该会话被在途命令占住——下一条命令直接被拒「上一条命令仍在执行」（实测 5 s 超时
++    后 20 s 的命令仍在跑、后续命令全部被拒）。几十分钟的实现/综合/报告导出请用
++    ``script_path``（配 ``background=True``）交给**脱离进程树**的独立 batch 进程，
++    再用 ``job_id`` 轮询；MCP server 退出、回合结束、^C 都不会波及它。
++
+     Args:
+-        command: Tcl 命令文本（支持多行）。
++        command: Tcl 命令文本（支持多行）。用 ``script_path`` / ``job_id`` 时可留空。
+         session_id: 目标会话 ID，默认 "default"。
+         timeout: 命令执行超时秒数，默认 120。注意超时语义:超时只是 MCP 停止
+             等待并返回错误,**命令在 Vivado 里仍在继续跑**(不会被取消),后续
+             命令会排队等它跑完。长任务(综合/实现/比特流)请改用
+             run_synthesis / run_implementation / generate_bitstream
+             (Python 轮询不阻塞),或按预期耗时调大本值。
++            ``script_path`` 模式下表示「最多等多少秒」：到点仍在跑就返回
++            ``[RUNNING]`` + job_id（**不算失败**，作业继续在后台跑）。
+         max_lines: 输出裁剪行数，默认 0 = 不限（行为与旧版完全一致）。
+             >0 时只保留原文**末尾** max_lines 行，并在开头加一行摘要，例如
+             ``[截断] 原文 1234 行 → 仅显示末 200 行（max_lines=200）；
+@@ -330,13 +1429,61 @@ async def run_tcl(
+             即使落在被裁掉的头部窗口里，也会在尾部「关键行」小节补回，绝不丢错误。
+         save_full_to: 可选文件路径。非空时把**完整**输出以 UTF-8 写到该文件，
+             返回文本里附上该路径（配合 max_lines 实现「裁剪 + 留全文」两全）。
++            ``stdout_tail_bytes`` 同时给出时，这里仍存**未裁剪**原文。
++        script_path: 可选 Tcl **脚本文件**绝对路径（必须存在，且路径纯 ASCII）。非空时
++            把该文件当 Vivado batch 脚本、以**脱离进程树**的独立进程跑，等价于
++            ``vivado -mode batch -source <file> -notrace -log <log> -journal <jou>``；
++            **不需要也不占用任何会话**（不依赖 start_session）。需要真 Vivado。
++            `background=False`（默认）时轮询到结束或 ``timeout`` 秒；超时返回
++            ``[RUNNING]`` + job_id + 已耗时 + 日志尾部，而不是报失败。
++        background: 仅在给了 ``script_path`` 时有意义。True = 启动后立刻返回
++            job_id / pid / 日志路径 / 状态文件路径，不等待；MCP server 退出、回合
++            结束、^C 都带不走该构建（`cmd.exe` 以 DETACHED_PROCESS 启动）。
++        log_file: 可选，仅在 ``script_path`` 模式下有意义。Vivado ``-log`` 的目标文件
++            （自动派生 ``.jou`` 与 ``.console.txt``）；留空则用脚本同目录的
++            ``<脚本名>.vivado.log``。该目录还会写 ``<job_id>.job.json`` 状态文件。
++        stdout_tail_bytes: >0 时把执行结果按**末尾 N 字节**裁剪（UTF-8 边界安全，不会
++            切出半个汉字），且 ``ERROR`` / ``CRITICAL WARNING`` / ``警告`` 行即使落在
++            窗口外也会在尾部「关键行」小节补回。默认 0 = 不裁剪（默认行为与旧版逐字节
++            一致）。与 ``max_lines`` 同时给出时**两者都生效**：先按字节裁、再按行裁
++            （取更严格者，两行摘要分别说明各自裁掉了什么）。
++            在 ``script_path`` / ``job_id`` 模式下表示「日志尾部回显多少字节」（默认 2000）。
++        job_id: 可选。查询一个 ``script_path`` 作业的状态（running / finished / failed /
++            unknown + 退出码 + 日志尾部），**不需要任何会话**；MCP server 重启后仍可查
++            （状态文件在日志同目录，job_id 索引在 ``%TEMP%\\vivado_mcp_tcl_jobs``）。
++            job_id 形如 ``tcljob-20261028-164500-1a2b3c``。
+     """
++    if (job_id or "").strip():
++        return _query_job_text(job_id, stdout_tail_bytes)
++
++    if (script_path or "").strip():
++        return await _run_script_job(
++            script_path, log_file, background, float(timeout), stdout_tail_bytes
++        )
++
++    if background or (log_file or "").strip():
++        return (
++            "[ERROR] background / log_file 只在 script_path 模式下有意义："
++            "请同时给 script_path=<Tcl 脚本文件绝对路径>（会话内命令用不到这两个参数）。"
++        )
++    if not (command or "").strip():
++        return (
++            "[ERROR] 三个入口至少给一个：command（会话内 Tcl 文本）、"
++            "script_path（Tcl 脚本文件 → 脱离式 batch）、job_id（查既有作业状态）。"
++        )
++
+     session = _require_session(ctx, session_id)
+     if not session:
+         return _NO_SESSION.format(sid=session_id)
+ 
+     text, _failed = await _render_result(
+-        session, command, float(timeout), "命令执行失败", max_lines, save_full_to
++        session,
++        command,
++        float(timeout),
++        "命令执行失败",
++        max_lines,
++        save_full_to,
++        stdout_tail_bytes,
+     )
+     return text
+ 

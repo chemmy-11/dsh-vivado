@@ -239,19 +239,20 @@ WARN = "环境本身没坏，但这件事还没做"；FAIL 只留给**做了一�
 
 ---
 
-## 11. `mcp-patches` — 四个本地 vivado-mcp 补丁在位（**按内容判定，缺了只 WARN**）
+## 11. `mcp-patches` — 本地 vivado-mcp 补丁在位（**按内容判定，缺了只 WARN**）
 
 | 项 | 内容 |
 |---|---|
-| 测什么 | 五组**内容标记**（`Select-String -SimpleMatch`），对应 `patches\vivado-mcp\0001..0004`：<br>① `tools\tcl_tools.py` 有 `max_lines: int = 0` 或 `save_full_to`（`run_tcl`/`safe_tcl` 输出裁剪）<br>② 同文件有 `_QUOTE_TRAP_HINT` 或 `close-quote`（`safe_tcl` 占位符踩坑提示）<br>③ `analysis\xdc_linter.py` 有 `_rule_breakdown` 或 `max_items: int = 0`（按规则聚合）<br>④ `tools\diagnostic_tools.py` 有 `max_items: int = 0`（`xdc_lint` 默认全量）<br>⑤ `tools\cdc_tools.py` 有 `max_details: int = 0`（`get_cdc_report` 默认全量） |
+| 测什么 | 十组**内容标记**（`Select-String -SimpleMatch`），对应 `patches\vivado-mcp\0001..0009`：<br>① `tools\tcl_tools.py` 有 `max_lines: int = 0` 或 `save_full_to`（`run_tcl`/`safe_tcl` 输出裁剪）<br>② 同文件有 `_QUOTE_TRAP_HINT` 或 `close-quote`（`safe_tcl` 占位符踩坑提示）<br>③ `analysis\xdc_linter.py` 有 `_rule_breakdown` 或 `max_items: int = 0`（按规则聚合）<br>④ `tools\diagnostic_tools.py` 有 `max_items: int = 0`（`xdc_lint` 默认全量）<br>⑤ `tools\cdc_tools.py` 有 `max_details: int = 0`（`get_cdc_report` 默认全量）<br>⑥ `tools\tcl_tools.py` 有 `_launch_job` 或 `script_path`（`run_tcl` 脚本文件脱离式后台作业）<br>⑦ `analysis\xdc_linter.py` 有 `_BENIGN_FAMILIES` 或 `benign_reason`（GT/MIG 良性族分组）<br>⑧ `tools\report_tools.py` 有 `RUN_NOT_FOUND` 或 `dcp_path`（就绪性 N/A + checkpoint）<br>⑨ `analysis\timing_parser.py` 有 `include_paths`（时序报告只要摘要）<br>⑩ `analysis\xdc_auto_fixer.py` 有 `_is_benign`（自修复跳过良性） |
 | 为什么按内容 | 补丁重打后 mtime 毫无意义；`.bak-mcp-*` 备份文件反而会让"没打补丁"看起来像"打了"。只认源码里的实际代码/字符串 |
-| PASS | 5/5 命中（本机 5/5） |
+| PASS | 10/10 命中（本机 2026-10-28 实测 10/10） |
 | WARN | 有缺失（detail 列出缺哪几个、present 有哪些），或 site 不可用 |
 | FAIL | **永不 FAIL** |
-| 修法 | `re-apply the 4 patch files in patches/vivado-mcp/ (Vivado still runs, but xdc_lint/get_cdc_report/run_tcl lose default-full or lossless output)` |
+| 修法 | `re-apply the patch files in patches/vivado-mcp/ (Vivado still runs, but xdc_lint/get_cdc_report/run_tcl lose default-full, lossless output, the detached script mode or the benign-family grouping)` |
 
-**为什么只 WARN**：缺补丁 = 少了"默认全量 / 无损输出 / 提示文本"，**Vivado 跑得动、工具也在**，
-只是 `xdc_lint` / `get_cdc_report` 会按上游默认截断（坑 #76：默认截断会静默吞掉真要修的那几条）。
+**为什么只 WARN**：缺补丁 = 少了"默认全量 / 无损输出 / 提示文本 / 脚本文件作业 / 良性族分组"，
+**Vivado 跑得动、工具也在**，只是 `xdc_lint` / `get_cdc_report` 会按上游默认截断（坑 #76：默认截断会静默吞掉真要修的那几条），
+`check_bitstream_readiness` 会把 checkpoint 式流程误判成 BLOCK，`xdc_auto_fix` 会给 GT/MIG 良性误报生成 IOSTANDARD。
 这是能力降级不是不可用，所以 WARN。
 
 ---

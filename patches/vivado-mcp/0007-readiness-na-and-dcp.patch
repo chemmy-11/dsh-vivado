@@ -1,0 +1,365 @@
+--- a/vivado_mcp/tools/report_tools.py
++++ b/vivado_mcp/tools/report_tools.py
+@@ -18,10 +18,12 @@
+ from vivado_mcp.analysis.suggestion_engine import format_suggestion, suggest_next
+ from vivado_mcp.analysis.timing_evidence import (
+     MAX_REPORT_BYTES,
++    checkpoint_facts,
+     compare_timing_baseline,
+     format_readiness_evidence,
+     make_timing_evidence,
+     physical_design_stage,
++    readiness_run_missing,
+     read_bounded_text,
+     report_context,
+     timing_error,
+@@ -43,6 +45,7 @@
+     QUERY_PROJECT_INFO,
+     QUERY_RUN_PROGRESS,
+     REPORT_VIOLATING_PATHS,
++    guard_appended_script,
+ )
+ from vivado_mcp.vivado.tcl_utils import validate_identifier
+ 
+@@ -241,6 +244,8 @@
+ @mcp.tool()
+ async def check_bitstream_readiness(
+     impl_run: str = "impl_1",
++    dcp_path: str = "",
++    run_name: str = "",
+     session_id: str = "default",
+     ctx: Context = None,
+ ) -> str:
+@@ -258,23 +263,44 @@
+     - READY:本次有限检查通过；不证明完整签核或硬件功能
+     - BLOCK:存在阻塞性问题(route 未完成 / 时序违例 / 大量 CW)
+     - WARN:可以生成但有风险(少量 CW 或估算时序偏低)
++    - N/A(不适用):所选 run 不存在。本工具只覆盖**工程 run 式流程**;
++       checkpoint 式自定义实现(synth_design → write_checkpoint →
++       open_checkpoint → place_design/route_design → write_bitstream)没有对应的
++       impl_1 run,所以 run 状态与 run 日志 CW 两类判据不适用 —— 这时不报
++       [ERROR]/BLOCK,而是给原因和可操作的替代路径(get_timing_report 读实现后
++       报告 / 看 .bit 文件事实 / run 式流程用 generate_bitstream)。
+ 
+     Args:
+         impl_run: 实现 run 名称,默认 "impl_1"。
+-        session_id: 目标会话 ID。
+-    """
+-    try:
+-        impl_run = validate_identifier(impl_run, "impl_run")
++        dcp_path: 可选检查点路径。给了就附 .dcp 事实(存在/绝对路径/字节数/修改
++            时间)与"只能证明已写出、不能离线证明可烧"的边界;不会执行
++            open_checkpoint(8-34 分钟,不塞进本工具)。
++        run_name: 与 impl_run 同义,非空时优先(便于与 generate_bitstream 参数名对齐)。
++        session_id: 目标会话 ID。
++    """
++    # run_name 优先且与 impl_run 同义:校验名随之切换,默认路径(只传 impl_run)
++    # 的报错文本与旧版逐字一致。
++    try:
++        target_run = validate_identifier(
++            run_name.strip() or impl_run, "run_name" if run_name.strip() else "impl_run",
++        )
+     except ValueError as e:
+         return f"[ERROR] {e}"
+ 
++    # 检查点事实先取(纯 stat,不需要会话):run 式与 checkpoint 式两条路都要用。
++    checkpoint = checkpoint_facts(dcp_path) if dcp_path.strip() else None
++
+     session = _require_session(ctx, session_id)
+     if not session:
+         return _NO_SESSION.format(sid=session_id)
+ 
+     try:
++        # QUERY_DESIGN_STAGE 用 guard 包住:没有打开的工程时它里面的 get_runs 会抛错,
++        # 整条拼接脚本 rc=1 会把"N/A(不适用)"误报成 [ERROR] [DEGRADED]。
+         pre_result = await session.execute(
+-            CHECK_PRE_BITSTREAM.format(impl_run=impl_run) + QUERY_DESIGN_STAGE, timeout=30.0,
++            CHECK_PRE_BITSTREAM.format(impl_run=target_run)
++            + guard_appended_script(QUERY_DESIGN_STAGE),
++            timeout=30.0,
+         )
+         if pre_result.is_error:
+             return (
+@@ -285,19 +311,23 @@
+         logger.warning("查询实现状态失败: %s", exc)
+         return f"[ERROR] [DEGRADED] 查询实现状态失败: {exc}"
+ 
++    # run 不存在 → N/A(不适用):不必再跑 report_timing_summary。run 状态类判据
++    # 已经不适用,再拿时序证据只会把 N/A 搅成 BLOCK/WARN。
+     timing_output, timing_error_message = None, ""
+-    try:
+-        result = await session.execute("report_timing_summary -return_string", timeout=60.0)
+-        if result.is_error:
+-            timing_error_message = (
+-                f"report_timing_summary rc={result.return_code}: {result.output[:200]}"
+-            )
+-        else:
+-            timing_output = result.output
+-    except Exception as exc:
+-        timing_error_message = f"{type(exc).__name__}: {exc}"
++    if not readiness_run_missing(pre_result.output):
++        try:
++            result = await session.execute("report_timing_summary -return_string", timeout=60.0)
++            if result.is_error:
++                timing_error_message = (
++                    f"report_timing_summary rc={result.return_code}: {result.output[:200]}"
++                )
++            else:
++                timing_output = result.output
++        except Exception as exc:
++            timing_error_message = f"{type(exc).__name__}: {exc}"
+     output, diagnostics = format_readiness_evidence(
+-        pre_result.output, timing_output, timing_error_message, impl_run,
++        pre_result.output, timing_output, timing_error_message, target_run,
++        checkpoint=checkpoint,
+     )
+     for message in diagnostics:
+         logger.warning("%s", message)
+
+--- a/vivado_mcp/tcl_scripts.py
++++ b/vivado_mcp/tcl_scripts.py
+@@ -773,8 +773,25 @@
+ """
+ 
+ 
++# 输出:
++#   VMCP_PRE_BIT:status=<STATUS>,critical_warnings=<N>   —— run 存在且状态可读(原语义)
++#   VMCP_PRE_BIT:status=RUN_NOT_FOUND,critical_warnings=-1 —— run 不存在/无工程
++#   VMCP_PRE_BIT_TOP:<top> / VMCP_PRE_BIT_CW:<样本> / VMCP_PRE_BIT_DONE
++#
++# 为什么要有 RUN_NOT_FOUND 分支:原来直接 `get_runs {impl_run}` 再
++# `get_property STATUS` 一个空列表,run 不存在时会抛
++# `ERROR: [Common 17-161] Invalid option value '' specified for 'object'`,
++# 整条脚本 rc=1,Python 侧只能把"run 不存在"报成 [ERROR] [DEGRADED]。但
++# checkpoint 式自定义实现(synth→write_checkpoint→open_checkpoint→place/route)
++# 本来就没有 impl_1 run —— 那时 run 状态类判据根本不适用,报错是误报。
++# 这里用 catch 兜住 get_runs(无工程时 get_runs 也会抛),空列表 → 显式发
++# RUN_NOT_FOUND 标记,由 analysis/timing_evidence.py 翻成 N/A(不适用)判定。
+ CHECK_PRE_BITSTREAM = """\
+-set __impl [get_runs {impl_run}]
++if {{[catch {{get_runs -quiet {impl_run}}} __impl]}} {{ set __impl [list] }}
++if {{[llength $__impl] == 0}} {{
++    puts "VMCP_PRE_BIT:status=RUN_NOT_FOUND,critical_warnings=-1"
++    puts "VMCP_PRE_BIT_DONE"
++}} else {{
+ set __status [get_property STATUS $__impl]
+ set __dir [get_property DIRECTORY $__impl]
+ set __log "$__dir/runme.log"
+@@ -803,4 +820,30 @@
+     puts "VMCP_PRE_BIT_CW:$__s"
+ }}
+ puts "VMCP_PRE_BIT_DONE"
+-"""
++}}
++"""
++
++
++def guard_appended_script(script: str, marker: str = "VMCP_STAGE_ERROR") -> str:
++    """把"附加查询脚本"包进 catch,再拼到主脚本后面一起执行。
++
++    用途:`report_tools.check_bitstream_readiness` 一次 execute 里拼了
++    ``CHECK_PRE_BITSTREAM + QUERY_DESIGN_STAGE``。没有打开的工程时
++    QUERY_DESIGN_STAGE 里的 ``get_runs`` 会抛错(``No open project``),于是整条
++    拼接脚本 rc=1,主判据(已打印的 ``VMCP_PRE_BIT`` 行)反而被 Python 侧的
++    ``is_error`` 分支盖成 ``[ERROR] [DEGRADED]``。
++
++    包进 catch 后:主判据照旧输出;附加查询失败只在输出里留一行
++    ``<marker>:<原因>``,rc 仍为 0。QUERY_DESIGN_STAGE 自身文本不变,
++    ``get_timing_report`` 那边仍原样单独执行(不受本包装影响)。
++
++    注意:这里靠花括号引用把 script 当字面脚本体,Tcl 的花括号计数要求
++    script 内花括号平衡 —— 本模块里的脚本常量都满足(它们本身就是合法 Tcl)。
++    """
++    return (
++        "if {[catch {\n"
++        f"{script}"
++        "} __vmcp_appended_err]} {\n"
++        f'    puts "{marker}:$__vmcp_appended_err"\n'
++        "}\n"
++    )
+
+--- a/vivado_mcp/analysis/timing_evidence.py
++++ b/vivado_mcp/analysis/timing_evidence.py
+@@ -17,6 +17,21 @@
+     "worst_slack_ns", "total_negative_slack_ns", "failing_endpoints", "total_endpoints",
+ )
+ _GROUPS = ("setup", "hold", "pulse_width")
++
++# tcl_scripts.CHECK_PRE_BITSTREAM 在 run 不存在(或当前没有打开的工程)时打印
++# `VMCP_PRE_BIT:status=RUN_NOT_FOUND`。这不是失败:checkpoint 式自定义实现
++# (synth→write_checkpoint→open_checkpoint→place/route)本来就没有 impl_1 run,
++# run 状态类判据对它不适用 —— Python 侧必须翻成 N/A(不适用),不能报 [ERROR]/BLOCK。
++RUN_NOT_FOUND = "RUN_NOT_FOUND"
++
++# N/A 判定的原因正文(逐行,面向 LLM 与人的可读解释;不含 BLOCK 字样)。
++_RUN_NOT_FOUND_REASON = (
++    "本工具只覆盖工程 run 式流程（synth_1 / impl_1 等由 launch_runs 管理的 run）。",
++    "checkpoint 式自定义实现（synth_design → write_checkpoint → open_checkpoint →",
++    "place_design / route_design → write_bitstream）没有对应的 impl_1 run，所以",
++    "「run 是否 route_design Complete」与「runme.log 里的 CRITICAL WARNING 数量」",
++    "两类判据都不适用；把缺失的 run 当成不通过会误判一个可能已经出过位流的流程。",
++)
+ 
+ 
+ def read_bounded_text(filename: str, limit: int) -> str:
+@@ -160,9 +175,14 @@
+ 
+ def make_timing_evidence(
+     raw: str, report: TimingReport, *, session_id: str = "", report_file: str = "",
+-    live_stage_output: str = "",
++    live_stage_output: str = "", include_paths: bool = True, max_paths: int = 0,
+ ) -> dict:
+-    """构造版本化 JSON 快照，由调用方自行保存作基线。"""
++    """构造版本化 JSON 快照，由调用方自行保存作基线。
++
++    ``include_paths=False`` 时不输出 ``paths`` / ``paths_truncated`` 键(只留摘要
++    与判定);``max_paths>0`` 时限第一条数,``paths_truncated`` 相应为真。默认
++    (True, 0) 与旧版逐字节等价:同样的键、同样的 50 条上限。
++    """
+     stage, context = report_context(raw)
+     stage_source = "report_header" if stage != "unknown" else "unknown"
+     physical_stage, stage_evidence = physical_design_stage(live_stage_output)
+@@ -172,7 +192,8 @@
+     metrics, parse_status, diagnostics = summary_metrics(raw)
+     if report.violating_paths_error:
+         diagnostics.append(f"违例路径查询降级: {report.violating_paths_error}")
+-    return {
++    paths_cap = max_paths if max_paths > 0 else 50
++    evidence = {
+         "schema_version": 1, "kind": "vivado_timing",
+         "provenance": {
+             "source": "report_file" if report_file else "live",
+@@ -186,10 +207,14 @@
+         "stage": stage, "context": context, "parse_status": parse_status,
+         "metrics": metrics, "verdict": evidence_verdict(metrics, parse_status, stage),
+         "comparison": None, "diagnostics": diagnostics,
+-        "paths": [asdict(path) for path in report.paths[:50]],
+-        "paths_truncated": len(report.paths) > 50,
+-        "violating_paths": [asdict(path) for path in report.violating_paths[:15]],
+     }
++    if include_paths:
++        # 键顺序与旧版一致(paths -> paths_truncated -> violating_paths),默认
++        # JSON 输出因此逐字节不变。
++        evidence["paths"] = [asdict(path) for path in report.paths[:paths_cap]]
++        evidence["paths_truncated"] = len(report.paths) > paths_cap
++    evidence["violating_paths"] = [asdict(path) for path in report.violating_paths[:15]]
++    return evidence
+ 
+ 
+ def timing_error(message: str, session_id: str = "", report_file: str = "") -> dict:
+@@ -281,11 +306,107 @@
+     return result
+ 
+ 
++def checkpoint_facts(path_text: str) -> dict:
++    """读取 ``.dcp`` 的文件事实（存在/绝对路径/字节数/修改时间），不打开检查点。
++
++    只做 stat,不执行 ``open_checkpoint``(后者要 8-34 分钟并占用全局唯一的 Vivado
++    会话,不能塞进一个"最后一瞥"级别的工具)。返回值是纯数据，交给
++    ``format_checkpoint_facts`` 排版；路径无法解析时 exists=False 而不是抛异常
++    —— 用户输错路径要看到"不存在"的明确说明,而不是一个工具级 [ERROR]。
++    """
++    raw = (path_text or "").strip()
++    expanded = Path(raw).expanduser()
++    try:
++        resolved = str(expanded.resolve())
++    except OSError:  # 非法路径字符等:保留用户输入,不中断判定
++        resolved = str(expanded)
++    facts = {
++        "input": raw, "resolved": resolved, "exists": False,
++        "size_bytes": None, "mtime": None,
++    }
++    try:
++        if expanded.is_file():
++            stat = expanded.stat()
++            facts["size_bytes"] = stat.st_size
++            facts["mtime"] = datetime.fromtimestamp(
++                stat.st_mtime
++            ).astimezone().isoformat(timespec="seconds")
++            facts["exists"] = True
++    except OSError:
++        pass
++    return facts
++
++
++def format_checkpoint_facts(facts: dict) -> list[str]:
++    """把 ``checkpoint_facts`` 的返回值排成一段，含"只能证明已写出"的边界声明。"""
++    out = ["", "检查点(.dcp)事实:"]
++    out.append(f"  输入: {facts.get('input') or '(空)'}")
++    out.append(f"  绝对路径: {facts.get('resolved') or '(无法解析)'}")
++    if facts.get("exists"):
++        size = int(facts["size_bytes"])
++        out.append("  存在: 是")
++        out.append(f"  字节数: {size} ({size / (1024 * 1024):.1f} MiB)")
++        out.append(f"  修改时间: {facts.get('mtime')}")
++    else:
++        out.append("  存在: 否（文件不存在或不是普通文件）")
++    out.append("  边界: .dcp 只能证明检查点已写出，不能离线证明时序已收敛或可烧写。")
++    out.append(
++        "  说明: 本工具不会对 .dcp 执行 open_checkpoint（一次 8-34 分钟开销）；"
++        "要看实现后时序请用 get_timing_report(report_file=...)。"
++    )
++    return out
++
++
++def readiness_run_missing(pre_raw: str) -> bool:
++    """``pre_raw`` 是否表明"该 run 不存在/当前无工程"（⇒ 判据不适用）。"""
++    status, _cw, _samples = parse_pre_bitstream(pre_raw)
++    return status.strip() == RUN_NOT_FOUND
++
++
++def _format_not_applicable(impl_run: str, checkpoint: dict | None) -> str:
++    """生成 N/A(不适用)判定文本：解释原因 + 可操作的替代路径。
++
++    刻意不出现 BLOCK/[ERROR]/[DEGRADED]:run 不存在不代表流程失败,只代表
++    "本工具的 run 式判据覆盖不到"。也刻意不给 PASS,避免"没检查"被读成"通过"。
++    """
++    out = [
++        "=== 烧板前检查: N/A (不适用) ===",
++        f"判定: 未找到 run '{impl_run}'，run 状态类判据不适用（既不是失败，也不是通过）。",
++        "原因:",
++    ]
++    out.extend(f"  {line}" for line in _RUN_NOT_FOUND_REASON)
++    out.extend([
++        "可操作替代:",
++        '  1) 时序: get_timing_report(report_file="<实现后 report_timing_summary 的 .rpt>")',
++        "     —— 离线读报告，不需要 Vivado 会话，与 run/checkpoint 流程无关。",
++        "  2) 位流产物: 看 .bit 是否存在 + 字节数 + 修改时间（早于 RTL/XDC 改动即过期产物）。",
++        "  3) 需要重出位流: run 式流程用 generate_bitstream / launch_runs impl_1 -to_step write_bitstream；",
++        "     checkpoint 式流程用 run_tcl 跑 place_design / route_design / write_bitstream。",
++        "说明: 本次未执行 report_timing_summary（run 不存在时它不是判据，只是一次多余查询）。",
++        "范围: 不代替约束覆盖、CDC、DRC、供电/引脚及硬件功能验证。",
++    ])
++    if checkpoint:
++        out.extend(format_checkpoint_facts(checkpoint))
++    return "\n".join(out)
++
++
+ def format_readiness_evidence(
+     pre_raw: str, timing_raw: str | None, timing_error_message: str, impl_run: str,
++    checkpoint: dict | None = None,
+ ) -> tuple[str, list[str]]:
+-    """纯函数生成有限范围的 readiness 判定及需记录的降级原因。"""
++    """纯函数生成有限范围的 readiness 判定及需记录的降级原因。
++
++    ``checkpoint`` 为 ``checkpoint_facts()`` 的返回值(可选):给了就在输出末尾附
++    .dcp 文件事实与"不能离线证明可烧"的边界；``pre_raw`` 表明 run 不存在时走
++    N/A(不适用)分支，不看时序证据、不给 BLOCK/[ERROR]。
++    """
+     status, cw_count, samples = parse_pre_bitstream(pre_raw)
++    if status.strip() == RUN_NOT_FOUND:
++        diagnostics = [
++            f"check_bitstream_readiness: run '{impl_run}' 不存在 → N/A(不适用);"
++            "未执行 report_timing_summary"
++        ]
++        return _format_not_applicable(impl_run, checkpoint), diagnostics
+     is_routed = bool(re.fullmatch(r"(?:route_design|write_bitstream) Complete!?", status))
+     blockers, warnings, diagnostics = [], [], []
+     degraded = False
+@@ -370,4 +491,6 @@
+         out.extend(f"  - {sample}" for sample in samples[:5])
+     if blockers:
+         out.extend(["", "建议: 运行 get_critical_warnings 查看详情,修复后再烧板。"])
++    if checkpoint:
++        out.extend(format_checkpoint_facts(checkpoint))
+     return "\n".join(out), diagnostics

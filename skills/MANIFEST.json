@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_by": "tools/gen_skills_manifest.py",
-  "source_hash": "0dd33d830dc2188002efb55c60e2009a3ea119d503e6cda37ad1803ab972abfa",
+  "source_hash": "3a9f2983d8fa4bea4d3598dc0258a3179321dacb42211901853f20972a9d993c",
   "tool_catalog": {
     "available": false,
     "source": "not-embedded",
@@ -32,7 +32,7 @@
     {
       "name": "hw-ila-debug",
       "dir": "hw-ila-debug",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Interact with ILA debug cores via vivado-mcp or chipscope-mcp. Discover cores, configure triggers, arm, capture, upload, export waveform data (CSV/VCD), and analyze results. ILA in vivado-mcp supports…",
       "license": "MIT",
       "references": [
@@ -53,7 +53,7 @@
     {
       "name": "hw-vio-debug",
       "dir": "hw-vio-debug",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Interact with VIO debug cores via vivado-mcp or chipscope-mcp. Read input probes, drive output probes, monitor activity, and reset outputs. vivado-mcp supports all device families. chipscope-mcp suppo…",
       "license": "MIT",
       "references": [
@@ -194,7 +194,7 @@
     {
       "name": "vivado-workflow-discipline",
       "dir": "vivado-workflow-discipline",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail…",
       "license": "MIT",
       "references": [

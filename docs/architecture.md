@@ -187,7 +187,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf       
 | 脚本 | 干什么 | 为什么存在（实测） |
 |---|---|---|
 | `tools/vivado-probe.ps1` | 写一行 Tcl 打印 `TCL_OK [info patchlevel]`，跑一次 batch，输出 `PROBE_*` 行 | `vivado.bat -version` 不是探针：重定向后 exit 1 且零输出（2026-10-24） |
-| `tools/vivado-run.ps1` | 把一份 Tcl 跑成 batch；`-Detach` 用 WMI 起脱离进程树的构建；两种模式都写 `build_status.txt` | 会话后台作业随回合中断被回收（2026-10-24 21:02）；`cmd /c "<带引号整串>"` 会二次套引号 |
+| `tools/vivado-run.ps1` | 把一份 Tcl 跑成 batch；`-Detach` 按 `wmi-com → wmi-cim → schtasks` 三级链起脱离进程树的构建（`RUN_LAUNCHER` 写明走了哪条）；两种模式都写 `build_status.txt` | 会话后台进程随回合中断被回收（2026-10-24 21:02）；`cmd /c "<带引号整串>"` 会二次套引号；2026-10-28 实测：CIM 路由 `Win32_Process.Create` 恒 `RV=8`，而老式 COM 路由可用且能逃出 `KILL_ON_JOB_CLOSE` job；默认 schtasks 任务因 `IdleSettings` 会把 34 min 实现段在 9m20s 静默停掉 |
 | `tools/tcl-check.ps1` | 找到 Vivado 自带的 `tclsh85t.exe`、补齐 `PATH` + `TCL_LIBRARY`，逐文件跑 `info complete` | 直接调 tclsh85t 报 `0xC0000135`（缺 DLL）；旧 CI 因此把 Tcl 语法检查永久 SKIP 了 |
 
 **为什么都要经过一个生成的 `.cmd` 包装器**：Windows PowerShell 5.1 里，`Start-Process -PassThru` 对 `.bat` 返回的 Process 对象 `ExitCode` 是 `$null`（2026-10-25 实测，Vivado 已经正常 `Exiting` 了仍然为空）。把 `%ERRORLEVEL%` 交给 cmd 自己写进状态文件，再读回来，是唯一不丢值的做法（`lib/common.ps1` 的 `Write-KitBatchLauncher` / `Get-KitBatchExitCode`）。包装器里两处 cmd 解析细节是刻意的，**不要"简化"**：`%KIT_RC% >> "file"` 之间必须留空格（变量展开后裸 `0>>` / `2>>` 是句柄重定向，不是追加）；`cmd /c` 后面只跟**一个**带引号的 token（整串带引号是实测失败形态）。

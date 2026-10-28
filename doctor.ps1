@@ -1091,6 +1091,31 @@ function Test-CheckMcpPatches {
             Label = 'get_cdc_report default full (patch 0004)'
             File  = (Join-Path $site 'vivado_mcp\tools\cdc_tools.py')
             Any   = @('max_details: int = 0')
+        },
+        @{
+            Label = 'run_tcl script-file job (patch 0005)'
+            File  = (Join-Path $site 'vivado_mcp\tools\tcl_tools.py')
+            Any   = @('_launch_job', 'script_path')
+        },
+        @{
+            Label = 'xdc_lint known-benign families (patch 0006)'
+            File  = (Join-Path $site 'vivado_mcp\analysis\xdc_linter.py')
+            Any   = @('_BENIGN_FAMILIES', 'benign_reason')
+        },
+        @{
+            Label = 'bitstream readiness N/A + dcp_path (patch 0007)'
+            File  = (Join-Path $site 'vivado_mcp\tools\report_tools.py')
+            Any   = @('RUN_NOT_FOUND', 'dcp_path')
+        },
+        @{
+            Label = 'timing report include_paths (patch 0008)'
+            File  = (Join-Path $site 'vivado_mcp\analysis\timing_parser.py')
+            Any   = @('include_paths')
+        },
+        @{
+            Label = 'xdc_auto_fix skips benign (patch 0009)'
+            File  = (Join-Path $site 'vivado_mcp\analysis\xdc_auto_fixer.py')
+            Any   = @('_is_benign')
         }
     )
     $present = New-Object System.Collections.Generic.List[string]
