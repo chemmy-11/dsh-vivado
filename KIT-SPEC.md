@@ -125,8 +125,8 @@ shipped 逐字节一致，见结论 §2.2）；Lead 会把它落到 `templates/s
 | 8 | `license` | 静态判定：`XILINXD_LICENSE_FILE`/`LM_LICENSE_FILE` 或 `~/.Xilinx/*.lic` | **只 WARN，不 FAIL**（license 可能来自别处） |
 | 9 | `bundle-installed` | profile `dependencies` 有 link 依赖且目录存在 + `dsh.profile.bundles` 含之 | FAIL=缺依赖/目录不存在/未登记；**裸 profile（零痕迹）=WARN** |
 | 10 | `bundle-rendered` | staging 的 `cordis.patch.yml` 存在、无未替换占位符（`{{model}}` 除外）、`customSkillDirs` 指向存在目录 | FAIL=缺失/占位符残留/目录不存在 |
-| 11 | `mcp-patches` | 3 个内容探针（`xdc_lint.max_items=0`、`get_cdc_report.max_details=0`、`tcl_tools` 的 `safe_tcl` 提示/`max_lines`） | **只 WARN**（缺补丁仍能跑，只是默认非全量） |
-| 12 | `compatibility` | profile 里 mcp-client 版本 ≠ 运行时版本时，`compatibility.json` 必须有该精确豁免键；运行时版本取 `dsh.cmd --version` | **只 WARN 永不 FAIL**（缺豁免时 mcp 行会被静默禁用） |
+| 11 | `mcp-patches` | 10 个内容探针（`tcl_tools` 的裁剪/安全提示 + `run_tcl` 脚本文件作业、`xdc_linter` 聚合/良性族、`diagnostic_tools` 默认全量、`cdc_tools` 默认全量、`report_tools` 就绪性 N/A、`timing_parser` include_paths、`xdc_auto_fixer` 跳良性） | **只 WARN**（缺补丁仍能跑，只是默认非全量/少能力） |
+| 12 | `compatibility` | profile 里 mcp-client 版本 ≠ 运行时版本时，`compatibility.json` 必须有该精确豁免键；运行时版本取 `dsh.cmd --version` | **判得了才 FAIL**（2026-11-04 起）：表缺失/键缺失/值不含运行时版本 ⇒ FAIL（宿主会静默丢掉 `mcp-vivado` 行 = 32 工具全没）；没有 mcp-client / 版本来源不可靠 ⇒ WARN |
 | 13 | `skills` | staging `skills/` 含 8 个技能目录（AMD 6 + `amd-doc-search` + `vivado-workflow-discipline`），每个 `SKILL.md` 的 `name:` == 目录名 | FAIL=目录/SKILL.md 缺失或 name 不符；WARN=staging 不存在 |
 
 要求：`doctor.ps1 -Json` 输出机器可读结果（`{id,title,status,detail,fix}` 五字段）；退出码 0=无 FAIL，1=至少一项 FAIL。

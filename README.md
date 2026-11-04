@@ -103,7 +103,7 @@ powershell -ExecutionPolicy Bypass -File .\doctor.ps1
 | 症状 | 先做什么 |
 |---|---|
 | 重启后看不到 `Vivado` 预设 | 确认真的重启过；确认装到的是你打开的那个 profile（`-Profile`）；再跑 `doctor.ps1` 看第 9/10 项 |
-| 预设有了，但一个 `mcp__vivado__*` 都没有 | 多半是 profile 缺 `compatibility.json` 版本豁免 → 重跑 `install.ps1`（**别带** `-SkipCompatibility`）后重启 |
+| 预设有了，但一个 `mcp__vivado__*` 都没有（含"DSH 刚自动升级后"） | 多半是 profile 缺 `compatibility.json` 版本豁免 → 重跑 `install.ps1`（**别带** `-SkipCompatibility`）后重启；`doctor.ps1` 第 12 项会直接点名 |
 | `start_session` 失败 / Tcl 报 `File not found` | 几乎都是**非 ASCII 路径**；`doctor.ps1` 第 5 项会点名是哪个配置键 |
 | `xdc_lint` / `get_cdc_report` 明细被截断 | 没打 `patches/vivado-mcp` 的补丁（默认不自动打），见 [`patches/vivado-mcp/README.md`](patches/vivado-mcp/README.md) |
 

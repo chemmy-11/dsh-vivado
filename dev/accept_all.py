@@ -88,6 +88,7 @@ SECRET_RE = re.compile(
 LIVE_FILES = ("package.json", "pnpm-lock.yaml", "compatibility.json", "cordis.patch.yml")
 
 results = []  # type: list[tuple[str, bool, str]]
+skips = []  # type: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +98,12 @@ def record(name: str, ok: bool, detail: str = "") -> bool:
     results.append((name, ok, detail))
     print("  [{0}] {1}{2}".format("PASS" if ok else "FAIL", name, " -- " + detail if detail else ""))
     return ok
+
+
+def skip(name: str, detail: str = "") -> None:
+    """An *unavailable* gate: printed and listed, never counted as a pass (judged != passed)."""
+    skips.append(name)
+    print("  [SKIP] {0}{1}".format(name, " -- " + detail if detail else ""))
 
 
 def run(cmd, env_extra=None, timeout=900, cwd=None):
@@ -130,6 +137,29 @@ def dump_config(home=None):
     if rc != 0:
         print("    ! --dump-config rc={0}\n{1}".format(rc, redact(text[-1500:])))
     return text
+
+
+def dump_schema(home=None):
+    """`dsh --profile <p> --dump-config-schema` -> <HOME>/schema.json, or None when unavailable.
+
+    The schema is the runtime's own oracle for entry/patch shapes (2026-11-04: added because a DSH
+    upgrade can change composition behaviour without changing any file the kit owns). Not every
+    build exposes it, so callers must treat None as SKIP (unavailable), never as PASS.
+    """
+    rc, text = dsh("--profile", PROFILE, "--dump-config-schema", home=home)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        print("    ! --dump-config-schema rc={0} gave no JSON".format(rc))
+        return None
+    body = text[start:end + 1]
+    try:
+        json.loads(body)
+    except ValueError as exc:
+        print("    ! --dump-config-schema returned invalid JSON: {0}".format(exc))
+        return None
+    out = (home or HOME) / "schema.json"
+    out.write_text(body, encoding="utf-8")
+    return out
 
 
 def sha(path: Path) -> str:
@@ -492,6 +522,23 @@ def group_install() -> bool:
     ok &= record("dump-config: mcp-vivado row", "- id: mcp-vivado" in dump)
     ok &= record("dump-config: mcp tools prefixed vivado", "serverName: vivado" in dump)
 
+    # Schema gate (2026-11-04): the runtime's own `--dump-config-schema` is the only offline oracle
+    # for entry/patch *shapes*. It catched a real DSH-upgrade class of breakage: the kit's YAML is
+    # valid for one release and silently invalid for the next. SKIP (not PASS) when unavailable.
+    dump_file = HOME / "dump-config.yml"
+    dump_file.write_text(dump, encoding="utf-8")
+    schema = dump_schema()
+    if schema is None:
+        skip("schema: rendered patch is valid on this runtime", "no --dump-config-schema in this DSH build")
+        skip("schema: composed dump is valid on this runtime", "no --dump-config-schema in this DSH build")
+    else:
+        for label, extra in (("rendered patch", ["--patch", str(patch_path)]),
+                             ("composed dump", ["--entries", str(dump_file)])):
+            src, sout, serr, _ = run([sys.executable, str(HERE.parent / "validate_schema.py"),
+                                      "--schema", str(schema)] + extra)
+            ok &= record("schema: {0} is valid on this runtime".format(label),
+                         src == 0, "" if src == 0 else tail(sout + serr, 6))
+
     # idempotency: a second run over the same config must not touch the profile
     h1 = {n: sha(prof / n) for n in ("package.json",) if (prof / n).is_file()}
     rc2, txt2 = ps(KIT / "install.ps1", *_install_args(cfg, part=PART), env_extra=env)
@@ -615,7 +662,7 @@ def _bad_vivado_path(value: str) -> str:
 
 
 def group_doctor() -> bool:
-    print("\n== doctor: clean run + 3 injected failures ==")
+    print("\n== doctor: clean run + 4 injected failures ==")
     installed = (HOME / "bundles" / KIT_PACKAGE / "cordis.patch.yml").is_file()
     if not installed:
         make_home()
@@ -664,6 +711,31 @@ def group_doctor() -> bool:
     except (ValueError, IndexError) as exc:
         ok &= record("doctor -Json is valid JSON with the 5 fields", False,
                      "{0}: {1}".format(exc, out3[:200].replace("\n", " ")))
+
+    # check 12 must be decisive, not advisory (2026-11-04): a stale exemption means the host drops
+    # the mcp-vivado row and the preset loses all 32 tools, so doctor has to FAIL and say so.
+    prof = HOME / "profiles" / PROFILE
+    compat = prof / "compatibility.json"
+    pkg = prof / "node_modules" / "@deepseek-ai" / "dsh-mcp-client" / "package.json"
+    if compat.is_file() and pkg.is_file():
+        original = compat.read_text(encoding="utf-8")
+        try:
+            mcp_ver = json.loads(pkg.read_text(encoding="utf-8")).get("version", "")
+            key = "@deepseek-ai/dsh-mcp-client@" + str(mcp_ver)
+            data = json.loads(original or "{}")
+            data.pop(key, None)
+            compat.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            rc4, out4 = ps(KIT / "doctor.ps1", *doctor, env_extra=env)
+            hit = re.search(r"\[FAIL\]\s*compatibility\b(.*)", out4)
+            ok &= record("doctor catches a missing compatibility exemption",
+                         rc4 != 0 and bool(hit),
+                         (hit.group(1).strip()[:110] + " | exit=" + str(rc4)) if hit
+                         else "exit={0}".format(rc4))
+        finally:
+            compat.write_text(original, encoding="utf-8")
+    else:
+        skip("doctor catches a missing compatibility exemption",
+             "probe profile has no compatibility.json / mcp-client package")
     return ok
 
 
@@ -846,6 +918,8 @@ def main() -> int:
     for name, ok, detail in results:
         if not ok:
             print("  FAILED: {0} :: {1}".format(name, detail))
+    for name in skips:
+        print("  SKIPPED (unavailable, not a pass): {0}".format(name))
 
     guard_ok = True
     if LIVE_PROFILE:

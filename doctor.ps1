@@ -37,6 +37,10 @@
          a *partial*/broken install is a FAIL.
        * check 11 (patches missing only loses the default-full behaviour; Vivado still works).
        * check 8 (licenses may legitimately live in a file server / env we cannot see).
+       * check 12 only when the judgement itself is impossible (no mcp-client in the profile, or the
+         runtime version could not be read with its prerelease suffix). A *decisive* "the exemption
+         is missing or stale" IS a FAIL: the host silently drops the mcp-vivado row at session load,
+         so the whole preset loses its 32 tools.
        * checks skipped by -Quick, and "cannot verify statically" cases.
 
 .PARAMETER Config
@@ -1177,14 +1181,14 @@ function Test-CheckCompatibility {
     $compat = Read-DoctorJsonFile $compatPath
     $fix = ('re-run install.ps1 -Profile ' + $script:State['ProfileName'] + ' (it merges the exemption) or add "' + $key + '": ["' + $runtime + '"] to ' + (ConvertTo-SlashPath $compatPath))
     if ($null -eq $compat) {
-        return New-Result 'compatibility' 'mcp-client compatibility' 'WARN' `
-            ('compatibility.json is missing or unreadable (' + (ConvertTo-SlashPath $compatPath) + '); DSH would silently drop the mcp-vivado row' + $detailTail) `
+        return New-Result 'compatibility' 'mcp-client compatibility' 'FAIL' `
+            ('compatibility.json is missing or unreadable (' + (ConvertTo-SlashPath $compatPath) + '); the host will silently drop the mcp-vivado row and the preset loses all of its mcp__vivado__* tools' + $detailTail) `
             $fix
     }
     $val = Get-DoctorJsonValue $compat $key
     if ($null -eq $val) {
-        return New-Result 'compatibility' 'mcp-client compatibility' 'WARN' `
-            ('compatibility.json has no key "' + $key + '"; DSH would silently drop the mcp-vivado row' + $detailTail) `
+        return New-Result 'compatibility' 'mcp-client compatibility' 'FAIL' `
+            ('compatibility.json has no key "' + $key + '"; the host will silently drop the mcp-vivado row and the preset loses all of its mcp__vivado__* tools' + $detailTail) `
             $fix
     }
     $listed = @($val | ForEach-Object { [string]$_ })
@@ -1194,8 +1198,8 @@ function Test-CheckCompatibility {
         return New-Result 'compatibility' 'mcp-client compatibility' 'PASS' `
             ('exemption "' + $key + '" -> [' + ($listed -join ', ') + ']' + $detailTail) ''
     }
-    return New-Result 'compatibility' 'mcp-client compatibility' 'WARN' `
-        ('exemption "' + $key + '" lists [' + ($listed -join ', ') + '] instead of the runtime version ' + $runtime + '; the mcp row may still be dropped' + $detailTail) `
+    return New-Result 'compatibility' 'mcp-client compatibility' 'FAIL' `
+        ('exemption "' + $key + '" lists [' + ($listed -join ', ') + '] instead of the runtime version ' + $runtime + '; every session of this profile silently loses the mcp-vivado row (32 tools)' + $detailTail) `
         $fix
 }
 

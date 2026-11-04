@@ -262,18 +262,21 @@ WARN = "环境本身没坏，但这件事还没做"；FAIL 只留给**做了一�
 | 项 | 内容 |
 |---|---|
 | 测什么 | profile 实际解析到的 `@deepseek-ai/dsh-mcp-client` 版本 ≠ DSH 运行时版本时，`<profile>\compatibility.json` 必须有键 `@deepseek-ai/dsh-mcp-client@<mcp 版本>`，且其值数组包含运行时版本 |
-| 运行时版本来源 | **`<dsh.cmd> --version` → `0.2.1-rc.2`**（约 0.35 s，保留预发布后缀）；退而求其次 exe `VersionInfo.ProductVersion` = `0.2.1.0`（**丢了 `-rc.2`，不能当豁免值**） |
+| 运行时版本来源 | **`<dsh.cmd> --version` → `0.2.1-rc.5`**（约 0.35 s，保留预发布后缀）；退而求其次 exe `VersionInfo.ProductVersion` = `0.2.1.0`（**丢了 `-rc.5`，不能当豁免值**） |
 | mcp-client 版本来源 | `<profile>\node_modules\@deepseek-ai\dsh-mcp-client\package.json` 的 `version`（本机 `0.1.7-rc.2`） |
 | 命令 | `dsh.cmd --version`（超时 30 s）+ 读两个 JSON |
-| PASS | 两版本相等（不需要豁免），或键存在且值含运行时版本；detail 写 `exemption "@deepseek-ai/dsh-mcp-client@0.1.7-rc.2" -> [0.2.1-rc.2] (runtime 0.2.1-rc.2 read from dsh.cmd --version)` |
-| WARN | `compatibility.json` 缺失/无该键/值里没有运行时版本/profile 没有 mcp-client/只能从 exe ProductVersion 拿到版本（那种值会写坏） |
-| FAIL | 无（该项不判 FAIL：mcp 行被静默丢弃属于"能力降级"） |
+| PASS | 两版本相等（不需要豁免），或键存在且值含运行时版本；detail 写 `exemption "@deepseek-ai/dsh-mcp-client@0.1.7-rc.2" -> [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.5] (runtime 0.2.1-rc.5 read from dsh.cmd --version)` |
+| WARN | 判不了的那几种：profile 没有 mcp-client / 只能从 exe `ProductVersion` 拿到版本（那种值会写坏）/ 读不到运行时版本 |
+| FAIL | **判得了且判出"会被丢"**：`compatibility.json` 缺失或不可读、没有该键、值里没有运行时版本（2026-11-04 起；此前是 WARN） |
 | 修法 | `re-run install.ps1 -Profile <p> (it merges the exemption) or add "@deepseek-ai/dsh-mcp-client@<v>": ["<runtime>"] to <profile>\compatibility.json` |
 
-**后果**：DSH 加载 profile 时，插件版本与宿主不一致又没有豁免 → **静默丢掉那一行**（`mcp-vivado` 整行消失，
-工具面从 91 掉回 59），日志里不一定有明显报错。所以宁可 WARN 得啰嗦一点。
-**实测坑**：`D:\dsh\DeepSeek Harness.exe` 的 `ProductVersion = 0.2.1.0`、`FileVersion = 0.2.1-rc.2`；
-活 profile 里的值是 `["0.2.1-rc.2"]`。写豁免**必须**用 `dsh.cmd --version` 的结果。
+**后果（为什么升级成 FAIL）**：DSH 加载 profile 时，插件版本与宿主不一致又没有豁免 → **静默丢掉那一行**
+（`mcp-vivado` 整行消失，工具面从 91 掉回 59），日志里不一定有明显报错。2026-11-04 实测：宿主从
+`0.2.1-rc.3` 升到 `rc.5`，本机 `compatibility.json` 仍只列 `[0.2.1-rc.2, 0.2.1-rc.3]` ⇒ 预设还在、
+32 个工具随时会没；这不是"能力降级"，而是**该预设的全部价值消失**，所以 doctor 必须 FAIL 并给出
+一条命令能修好的写法（`install.ps1` 会 merge 当前运行时版本，不会覆盖其它键）。
+**实测坑**：`D:\dsh\DeepSeek Harness.exe` 的 `ProductVersion = 0.2.1.0`、`FileVersion = 0.2.1-rc.5`；
+活 profile 里的值现为 `["0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.5"]`。写豁免**必须**用 `dsh.cmd --version` 的结果。
 
 ---
 
@@ -308,7 +311,7 @@ WARN = "环境本身没坏，但这件事还没做"；FAIL 只留给**做了一�
 | 9 | `bundle-installed` | profile 与 staging 都完全没有 kit 痕迹 | "还没装"不是"坏了"（Lead 裁决） |
 | 10 | `bundle-rendered` | staging 不存在 | 还没装，无可验证 |
 | 11 | `mcp-patches` | 永远 WARN（缺补丁/无 site） | 只丢默认全量行为，Vivado 照跑（§11） |
-| 12 | `compatibility` | 键缺失/值不含运行时版本/版本来源不可靠 | 后果是 mcp 行被静默丢弃 = 能力降级 |
+| 12 | `compatibility` | 判不了的情况：profile 没有 mcp-client / 版本来源不可靠 | 判得了的"键缺失 / 值不含运行时版本"是 **FAIL**（2026-11-04 起）：mcp 行被静默丢弃 = 预设 32 个工具全没 |
 | 13 | `skills` | staging 不存在 | 还没装，无可验证 |
 
 ---

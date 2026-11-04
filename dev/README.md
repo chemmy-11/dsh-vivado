@@ -21,8 +21,9 @@
 | 脚本 | 作用 | 会不会写你的真实 profile |
 |---|---|---|
 | `validate_patch.py` | 结构校验一份**渲染后**的 `cordis.patch.yml`（独立于渲染器自己的自检） | 不写任何东西 |
+| `validate_schema.py` | 用**当前 DSH 自己的** `--dump-config-schema` 校验渲染后 patch / 组合后 dump（2026-11-04 新增，见 §2.4） | 不写任何东西（只读 schema 与 YAML） |
 | `make_probe_home.py` | 把现有 profile 完整复制成一个**隔离** `DSH_HOME` | 源 profile 只读 |
-| `accept_all.py` | 6 组 50 条断言：`static` / `install` / `uninstall` / `manual` / `stranger` / `doctor` | 只写 `<work-dir>` |
+| `accept_all.py` | 6 组 53 条断言：`static` / `install` / `uninstall` / `manual` / `stranger` / `doctor` | 只写 `<work-dir>` |
 
 所有机器相关的东西都走参数：没有写死的盘符、没有写死的用户目录。
 
@@ -30,11 +31,12 @@
 
 | 项 | 要求 | 说明 |
 |---|---|---|
-| Python | **≥ 3.9** | 三个脚本都是纯 stdlib；`validate_patch.py` 另需 PyYAML |
-| PyYAML | 只有 `validate_patch.py` 需要 | 缺失时它会打印安装提示并 `exit 2`（不 vendor YAML 解析器） |
+| Python | **≥ 3.9** | 纯 stdlib；`validate_patch.py` 另需 PyYAML，`validate_schema.py` 另需 PyYAML + `jsonschema`（缺任一个都会 `exit 2`，不静默通过） |
+| PyYAML | `validate_patch.py` / `validate_schema.py` | 缺失时会打印安装提示并 `exit 2`（不 vendor YAML 解析器） |
+| jsonschema | 只有 `validate_schema.py` 需要 | 缺失时同样 `exit 2`；`accept_all.py` 会把它记成 `[SKIP]` 而不是 PASS |
 | PowerShell | **5.1**（`powershell.exe`） | 脚本用 `-NoProfile -ExecutionPolicy Bypass -File` 调 `.ps1` |
 | DeepSeek Harness | **桌面版真装过**，且至少有一个能用的 profile | `accept_all.py` 默认自动探测 `<DSH 安装根>`；探不到就传 `--dsh-install` |
-| 磁盘 | `<work-dir>` 预留 **≈350 MB**（≈1.1 万文件） | 探针 home 是 `node_modules` 的完整拷贝，不是链接 |
+| 磁盘 | `<work-dir>` 预留 **≈350 MB**（≈1.1 万文件） | 探针 home 是 `node_modules` 的完整拷贝，不是链接（联接点不跟随，见 §8） |
 | 宿主 | **不需要关闭** | 本目录脚本只写隔离 `DSH_HOME`；但别在同一时间手工改真实 profile，`[GUARD]` 会点名 |
 
 PyYAML 缺失时的安装方式（用**同一个解释器**）：
@@ -94,10 +96,10 @@ py <kit>\dev\make_probe_home.py --home <work-dir>\probe-accept --name probe --fo
 ### 2.3 端到端验收
 
 ```powershell
-py <kit>\dev\accept_all.py                                     # 全量 6 组 50 条
-py <kit>\dev\accept_all.py --only static                       # 只要 8 条，不需要 DSH 安装
+py <kit>\dev\accept_all.py                                     # 全量 6 组 53 条
+py <kit>\dev\accept_all.py --only static                       # 只要 9 条，不需要 DSH 安装
 py <kit>\dev\accept_all.py --only install,uninstall `
-   --home <work-dir>\probe-accept                              # 真装+真卸 25 条
+   --home <work-dir>\probe-accept                              # 真装+真卸 27 条
 py <kit>\dev\accept_all.py --keep-home                         # 复用已建好的探针 home
 ```
 
@@ -128,9 +130,33 @@ py <kit>\dev\accept_all.py --keep-home                         # 复用已建好
 退出码：`0` = 全过且真实 profile 一字节没动；`1` = 有 `[FAIL]`（或 `[GUARD]` 报真实 profile 被改）；
 `2` = 环境问题（缺入口文件、scratch 路径非 ASCII、探不到 DSH CLI、`--only` 写了不存在的组）。
 
-`[GUARD]` 是**矩阵之外**的一条守卫，不占 50 条里的名额：跑之前给真实 profile 的
+`[GUARD]` 是**矩阵之外**的一条守卫，不占 53 条里的名额：跑之前给真实 profile 的
 `package.json` / `pnpm-lock.yaml` / `compatibility.json` / `cordis.patch.yml` 记 `mtime+sha256`，
 再给 `%USERPROFILE%\.dsh\skills` 记一份目录指纹，跑完比对，不一致就把它点名并把退出码打成 1。
+
+### 2.4 适配新一代 DSH（改了哪一步、为什么）
+
+DSH 升级会改**组合行为**而不改我们仓库里的任何一个文件（2026-11-04 实测：0.2.1-rc.3 → rc.5
+的 shipped preset 行其实**一行没变**，但 `node_modules` 的解析次序变了，探针 home 里一份
+"被 robocopy 解引用"的旧 bundle 副本压过了 profile 依赖，装完的组合检查直接失败）。固定动作：
+
+```powershell
+# 1) 先看运行时版本与本机豁免（doctor 第 12 项现在会 FAIL，不再只是 WARN）
+powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\doctor.ps1
+
+# 2) 隔离 home + 安装：组合 + schema 两条门禁都在 install 组里
+py <kit>\dev\accept_all.py --only install --home <work-dir>\probe-accept
+
+# 3) 单独验 schema（给了 DSH 的 --dump-config-schema 才有意义）
+py <kit>\dev\validate_schema.py --schema <home>\schema.json --patch <home>\bundles\dsh-vivado\cordis.patch.yml
+py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dump-config.yml
+```
+
+- **`--dump-config` 仍然不校验 `compatibility.json`**（老结论没变），只有 doctor 第 12 项读文件判；
+  rc.5 起第 12 项从 WARN 升成 **FAIL**：豁免缺失/过期 ⇒ 宿主静默丢掉 `mcp-vivado` 行 ⇒ 32 个工具全没了。
+- **「shipped preset 行有没有变」怎么查**：在隔离 home 里 `dsh --profile probe --dump-config`，
+  拿 `preset-standard` 的 `plugins` 与我们模板里的 22 行做结构 diff（2026-11-04 实测 rc.5：**0 处差异**）。
+  这不是脚本门禁（没有稳定的机器可读入口），是升级时的**人工确认项**，结论写进 `docs/version-matrix.md`。
 
 ## 3. 安全边界
 
@@ -147,18 +173,18 @@ py <kit>\dev\accept_all.py --keep-home                         # 复用已建好
 - pnpm 的**全局 store**（`%LOCALAPPDATA%\pnpm\store`）不在隔离范围内，会被复用；这是 pnpm 的正常行为，不是泄漏。
 - 每轮验收都会重建 `<work-dir>\probe-accept`，别把要留的东西放进去。
 
-## 4. 50 条断言覆盖什么
+## 4. 53 条断言覆盖什么
 
 | 组 | 条数 | 覆盖 | 代表断言 |
 |---|---:|---|---|
 | `static` | 9 | 生成器/渲染器/技能清单/卫生 | 两档各渲染+校验一次；仓库里没有 `__pycache__`/`.bak-*`/`config.yml`；3 个运行辅助脚本 + `templates/build-markers.tcl` 在场且纯 ASCII；仓库文本里没有作者主目录路径（`skills/` 是 vendored、`dev/` 是维护者工具，两者豁免） |
-| `install` | 18 | `-Mode auto` 真装 + 组合快照 + 幂等 + `-WhatIf` + 红线 | 依赖写成 `link:<home>\bundles\...`；bundle 只追加一次；`--dump-config` 四条标记；第二次装 `package.json` sha 不变；`-WhatIf` 前后字节不变；`%USERPROFILE%\.dsh\skills` 未被写 |
+| `install` | 20 | `-Mode auto` 真装 + 组合快照 + **schema 门禁** + 幂等 + `-WhatIf` + 红线 | 依赖写成 `link:<home>\bundles\...`；bundle 只追加一次；`--dump-config` 四条标记；**渲染后的 patch 与组合后的 dump 都过一遍当前 DSH 的 `--dump-config-schema`**（该 DSH 不暴露 schema 时记 `[SKIP]`，不冒充 PASS）；第二次装 `package.json` sha 不变；`-WhatIf` 前后字节不变；`%USERPROFILE%\.dsh\skills` 未被写 |
 | `uninstall` | 7 | 干净移除 | 依赖行/`bundles` 行/staging/`node_modules` 联接全没了；`--dump-config` 仍能组合；第二次卸是 no-op |
 | `manual` | 4 | `-Mode manual`（完全不用 pnpm） | 依赖与 bundle 行就位；组合出 `preset-vivado` + `mcp-vivado` |
 | `stranger` | 7 | 换机器视角（另一个 part / project_root） | persona 带上新 part 与新工程根、旧 part 无残留；**回归守卫**：staging 已存在时再传另一个 `-Config` 必须重新渲染（`P0` 那次的 bug） |
-| `doctor` | 5 | 体检自己会不会报错 | 健康机器 exit 0；注入 3 个故障（非 ASCII 路径 / 不存在的 Vivado / 错误的 MCP site）分别被抓成 `[FAIL] <id>`；`-Json` 是合法 JSON 且字段恒为 5 个 |
+| `doctor` | 6 | 体检自己会不会报错 | 健康机器 exit 0；注入 4 个故障（非 ASCII 路径 / 不存在的 Vivado / 错误的 MCP site / **删掉 `compatibility.json` 的豁免键**）分别被抓成 `[FAIL] <id>`；`-Json` 是合法 JSON 且字段恒为 5 个 |
 
-合计 **9 + 18 + 7 + 4 + 7 + 5 = 50**。`--only install,uninstall` 那条快路径是 **18 + 7 = 25** 条。
+合计 **9 + 20 + 7 + 4 + 7 + 6 = 53**。`--only install,uninstall` 那条快路径是 **20 + 7 = 27** 条。
 
 ## 5. 不覆盖什么（别把绿当全绿）
 
@@ -168,7 +194,9 @@ py <kit>\dev\accept_all.py --keep-home                         # 复用已建好
 | 预设的 **UI 渲染**（插件卡片标题/图标/描述、预设下拉） | 那是宿主读 `locale/*.json` 与 `icon.png`，不在命令行输出里 | 打开宿主界面看一眼；显示元数据见 [docs/architecture.md](../docs/architecture.md) §8.5 |
 | 真实 Vivado 行为（综合、`xdc_lint`、ILA） | 需要 Vivado + license + 器件 | `doctor.ps1` 只判静态条件，深水区靠真机 |
 | `tools/vivado-probe.ps1` / `vivado-run.ps1` / `tcl-check.ps1` 的**真跑** | 会启动 Vivado（每次约 10-40 s），验收脚本刻意不碰 | 手工跑一次探针（`PROBE_RESULT=OK`）与 `tcl-check.ps1`（`TCLCHECK_RESULT=PASS`），见 [docs/architecture.md](../docs/architecture.md) §10 的门禁顺序 |
-| `compatibility.json` 是否被宿主真正采用 | 实测 `--dump-config` **不校验**它（见 [docs/architecture.md](../docs/architecture.md) §6） | `doctor.ps1` 第 12 项 + 真会话 |
+| `compatibility.json` 是否被宿主真正采用 | 实测 `--dump-config` **不校验**它（见 [docs/architecture.md](../docs/architecture.md) §6） | `doctor.ps1` 第 12 项（rc.5 起该判定缺失/过期直接 **FAIL**）+ 真会话 |
+| `--dump-config-schema` 不存在的老版本 DSH | 不是每个 DSH 构建都暴露 schema | schema 两条断言记 `[SKIP]`（不是 PASS）；手工按 [docs/version-matrix.md](../docs/version-matrix.md) 登记 |
+| shipped preset 行与新版 DSH 的差异 | 没有稳定机器可读入口 | §2.4 的结构 diff 步骤 + `docs/version-matrix.md` 登记 |
 | `2025.2+` 档的版本事实 | 本机未实测 | [docs/version-matrix.md](../docs/version-matrix.md) §5 |
 | pnpm/CLI 路径本身是否走通 | `install` 组跑 `-Mode auto`：CLI 失败会自动降级 `manual`，仍然 PASS | 看输出里是 `official CLI install finished` 还是 `falling back to the manual` |
 | 卸载后宿主是否真的「忘了」这一层 | 只有重启才知道 | 重启后 `doctor.ps1` + 预设列表 |
@@ -179,7 +207,9 @@ py <kit>\dev\accept_all.py --keep-home                         # 复用已建好
 |---|---|---|
 | `install.ps1`、`lib/install-helpers.ps1` | `static` + `install` + `uninstall` + `manual` + `stranger` | 装、卸、不回退路径、`-Config` 重渲染都在这一组 |
 | `uninstall.ps1` | 先 `install` 再 `uninstall`（`--only install,uninstall`） | 卸要卸得掉一个真装好的探针 home |
-| `doctor.ps1` | `--only doctor`（会自己确保探针 home 已装） | 5 条里有 4 条是「该 FAIL 时必须 FAIL」 |
+| `doctor.ps1` | `--only doctor`（会自己确保探针 home 已装） | 6 条里有 4 条是「该 FAIL 时必须 FAIL」（含删豁免键那条） |
+| `dev/make_probe_home.py` | `--only install`（必须重建 home） | 探针 home 用 `/XJ` 不跟随联接点、且**一定**执行 strip，否则旧 bundle 副本会污染组合 |
+| `dev/validate_schema.py` | `--only install` | schema 门禁的两条断言在这里；改它之后至少跑一次 install 组 |
 | `tools/render_patch.ps1` | `static`（两档都会被渲染+校验） | 渲染器是两档共用 |
 | `templates/preset.patch.yml.tmpl` | `static`，**两档都要过** | 模板一处漂移会同时影响两档 |
 | `templates/persona/<tier>.frag.yml` | `static`，**两档都要过** | 只改一档 = 两档纪律开始分叉（[docs/architecture.md](../docs/architecture.md) §10） |
@@ -202,10 +232,10 @@ py <kit>\tools\gen_skills_manifest.py --check
 # 1) 静态组：9 条，几秒钟，不需要 DSH
 py <kit>\dev\accept_all.py --only static
 
-# 2) 真装 + 真卸：隔离 DSH_HOME，25 条
+# 2) 真装 + 真卸：隔离 DSH_HOME，27 条
 py <kit>\dev\accept_all.py --only install,uninstall --home <work-dir>\probe-accept
 
-# 3) 全量：6 组 50 条（自动探测 DSH；探测不到就加 --dsh-install <DSH 安装根>）
+# 3) 全量：6 组 53 条（自动探测 DSH；探测不到就加 --dsh-install <DSH 安装根>）
 py <kit>\dev\accept_all.py
 
 # 4) 真机：重启宿主 → 新会话选 Vivado → 数工具/技能（脚本管不到这一步）
@@ -218,6 +248,14 @@ rmdir /S /Q <work-dir>
 
 - **探针 home 是拷贝，不是联接。** `install.ps1` 会跑 `dsh plugin add`（pnpm 会重写 `node_modules`），
   联接到真实 profile 等于直接往用户的环境里写。
+- **robocopy 必须带 `/XJ`，且 strip 一定要跑到。** 真实 profile 的 `node_modules` 里有联接点
+  （本包 bundle、以及 `link:` 依赖）。不 `/XJ` 时 robocopy 会把它**解引用成一份实目录副本**；
+  如果源联接点的目标盘不存在，robocopy 还会以 `rc=9` 失败。2026-11-04 实测：旧实现在 `rc>=8`
+  就直接 `return 1`，于是 strip 没执行、探针 home 里留下一份**为真实 home 渲染的旧 bundle 副本**，
+  DSH 0.2.1-rc.5 的组合按 `node_modules` 解析时选中它 ⇒ 装完的组合检查报
+  `customSkillDirs does not point at <probe>/bundles/.../skills`。现在：`/XJ` + `rc&8` 只 WARN +
+  strip 永远执行；`install` 的 `New-KitDirectoryLink` 也会把「同一 package 的实目录副本」换成联接
+  （只认 `package.json` name 相符的，别的一律拒绝）。
 - **每组自建 home。** `install` / `manual` / `stranger` / `doctor` 各自 `--force` 重建，
   这样组之间不会互相污染；组内则故意复用（幂等、`-WhatIf`、第二次卸都得在同一个 home 上验）。
 - **`install` 组在 `-Mode auto` 下跑**：它证明的是「用户跑 `install.ps1` 会成功」，

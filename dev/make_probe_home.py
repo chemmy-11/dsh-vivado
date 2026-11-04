@@ -237,25 +237,45 @@ def main() -> int:
             print("[probe] stripped bundle row {0}".format(package))
     pkg_path.write_text(json.dumps(pkg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    # ---- full node_modules copy (robocopy: /E all subdirs, /R:1 /W:1 retry once, quiet) -----
+    # ---- full node_modules copy (robocopy: /E all subdirs, /XJ do not follow junctions) ------
+    # /XJ matters: the live profile's node_modules contains junctions (this kit's bundle and other
+    # link: dependencies). Without /XJ robocopy *dereferences* them into plain directory copies, so
+    # the probe home inherits a stale copy of the kit rendered for the LIVE home. Measured
+    # 2026-11-04 on DSH 0.2.1-rc.5: the host's module resolution then picked that copy over the
+    # profile dependency, the composition reported the live home's customSkillDirs, and the
+    # installer's own 4-marker verification failed. It also made robocopy fail outright (rc=9) when
+    # a junction pointed at a missing drive, which used to abort this script BEFORE the strip pass.
     node_modules = dest / "node_modules"
     print("[probe] copying node_modules (about 350 MB, one to two minutes)...")
     robocopy = ["robocopy", str(source / "node_modules"), str(node_modules),
-                "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/R:1", "/W:1"]
+                "/E", "/XJ", "/NFL", "/NDL", "/NJH", "/NJS", "/R:1", "/W:1"]
     print("$", " ".join(robocopy))
     try:
         rc = subprocess.call(robocopy)
     except FileNotFoundError:
         print("[ERROR] robocopy not found on PATH; this script needs Windows", file=sys.stderr)
         return 1
-    if rc >= 8:
+    # robocopy exit codes are a bitmask: 1 copied, 2 extra, 4 mismatch, 8 some failed, 16 fatal.
+    # 8 alone ("some files could not be copied") is tolerable for a probe home as long as the strip
+    # pass below still runs -- aborting there is what left a contaminated node_modules behind.
+    if rc >= 16:
         print("[ERROR] robocopy failed with rc={0}".format(rc), file=sys.stderr)
         return 1
+    if rc & 8:
+        print("[probe] WARN robocopy rc={0}: some files could not be copied; continuing with the "
+              "strip pass (a broken junction in the source profile is the usual cause)".format(rc))
 
     for package in strip:
         drop_node_modules_entry(node_modules, package)
 
     repoint_pnpm_bookkeeping(node_modules, dest, source)
+
+    # A probe home must look like a virgin machine: no kit bundle anywhere, including stale copies
+    # that an older run may have left behind.
+    for package in strip:
+        leftover = node_modules / package.replace("/", os.sep)
+        if leftover.exists():
+            drop_node_modules_entry(node_modules, package)
 
     print("[probe] DSH_HOME = {0}".format(home))
     print("[probe] profile  = {0}".format(dest))

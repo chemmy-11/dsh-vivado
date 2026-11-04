@@ -100,6 +100,10 @@ powershell -ExecutionPolicy Bypass -File D:\dsh-vivado\install.ps1   # 幂等：
 ```
 
 - 安装器是**幂等**的：重复跑不会产生重复依赖/重复条目，只会把 staging 内容与渲染产物刷新到当前版本。
+- **DSH 自己升级后也要重跑一次安装器**（2026-11-04 实测：宿主 rc.3 → rc.5 后，`compatibility.json` 的
+  "允许的运行时版本"仍是旧值 ⇒ `mcp-vivado` 行被静默丢弃、32 个工具消失）。重跑会把**当前**运行时版本 merge
+  进豁免表；不想重装就手工补值（见 §4）。判断方法：`doctor.ps1` 第 12 项现在会 **FAIL** 并点名
+  `lists [...] instead of the runtime version ...`。改完 **必须重启宿主**。
 - 改过 `config.yml` 后同样只需重跑安装器（或 `-RenderOnly` 刷新 staging）再重启。
 - **不想退出宿主**时的替代路径：在会话里让 agent 用 `plugin_manager`（`install_bundle` / `remove_bundle`）更新；
   这在宿主运行中也能生效，但**不刷新 staging 的文档/脚本副本**，所以仍建议按上面的流程做一次干净更新。
@@ -145,12 +149,19 @@ temp_dir: D:/fpga_project/.tmp                     # TEMP/TMP（必须 ASCII）
 
 `<profile>\compatibility.json` 是一张「版本豁免表」：`"<包>@<装的版本>": ["<允许的 dsh 版本>", ...]`。
 
-当 profile 里 `node_modules\@deepseek-ai\dsh-mcp-client\package.json` 的版本 **≠** 运行时版本时（本机实测：`0.1.7-rc.2` vs `0.2.1-rc.2`），需要这条豁免，否则会话加载时 `mcp-vivado` 那行会被丢掉 —— 预设就没有那 32 个 MCP 工具了。
+当 profile 里 `node_modules\@deepseek-ai\dsh-mcp-client\package.json` 的版本 **≠** 运行时版本时（本机实测：`0.1.7-rc.2` vs `0.2.1-rc.5`），需要这条豁免，否则会话加载时 `mcp-vivado` 那行会被丢掉 —— 预设就没有那 32 个 MCP 工具了。
+
+> **DSH 一升级就要重新 merge 一次（2026-11-04 实测）**：宿主从 `0.2.1-rc.3` 升到 `rc.5` 后，本机表里仍只有
+> `["0.2.1-rc.2", "0.2.1-rc.3"]` ⇒ `mcp-vivado` 行会被静默丢弃。修法二选一：
+> ① 重跑 `install.ps1`（它会自动 merge **当前**运行时版本，并备份旧表）；
+> ② 手工补一个值：`"@deepseek-ai/dsh-mcp-client@0.1.7-rc.2": ["0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.5"]`。
+> 之后 **必须重启宿主**（`compatibility.json` 只在 profile 加载时读）。`doctor.ps1` 第 12 项从 2026-11-04 起
+> 对"判得了的缺失/过期"直接 **FAIL**，一条命令就能看出是不是这个问题。
 
 安装器会：
 
-1. 读**运行时版本**：优先 `dsh.cmd --version` 的输出（正则取 `\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?`，本机 `0.2.1-rc.2`，约 0.35 s）；
-   拿不到才退到 `DeepSeek Harness.exe` 的 `VersionInfo.FileVersion`；**优先不用 `ProductVersion`**（它是 `0.2.1.0`，把 `-rc.2` 后缀丢了，写成它会写坏这张表）——`FileVersion` 也拿不到时才作最后兜底，并在日志里 WARN 说明来源。
+1. 读**运行时版本**：优先 `dsh.cmd --version` 的输出（正则取 `\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?`，本机 `0.2.1-rc.5`，约 0.35 s）；
+   拿不到才退到 `DeepSeek Harness.exe` 的 `VersionInfo.FileVersion`；**优先不用 `ProductVersion`**（它是 `0.2.1.0`，把 `-rc.5` 后缀丢了，写成它会写坏这张表）——`FileVersion` 也拿不到时才作最后兜底，并在日志里 WARN 说明来源。
 2. 读 profile 实际装的 mcp-client 版本。
 3. 两者不同且表里没有该键 → **先备份** `compatibility.json.bak-<yyyyMMdd>`，再**只合并**这一个键（其余键、其余允许版本原样保留），写成 2 空格缩进的 JSON。
 
@@ -162,7 +173,7 @@ temp_dir: D:/fpga_project/.tmp                     # TEMP/TMP（必须 ASCII）
 
 ```json
 {
-  "@deepseek-ai/dsh-mcp-client@0.1.7-rc.2": ["0.2.1-rc.2"]
+  "@deepseek-ai/dsh-mcp-client@0.1.7-rc.2": ["0.2.1-rc.5"]
 }
 ```
 

@@ -754,7 +754,26 @@ function New-KitDirectoryLink {
         Write-KitLog WARN ('replacing directory link {0} (new target {1})' -f $LinkPath, $TargetPath)
         [System.IO.Directory]::Delete($LinkPath, $false)
     } elseif ($kind -eq 'dir') {
-        throw ("refusing to create a link over an existing plain directory: {0}" -f $LinkPath)
+        # A plain directory here is either a Copy-Item fallback from an earlier install or a
+        # robocopy-dereferenced copy (measured 2026-11-04: a probe home inherited a stale copy of the
+        # LIVE bundle). Node resolves <profile>/node_modules/<pkg> before the profile dependency, so
+        # that copy shadows the freshly staged bundle and the composition check fails. Replace it
+        # only when its package.json proves it is this same package; never touch a foreign directory.
+        $pkgName = ''
+        $pkgJson = Join-Path $TargetPath 'package.json'
+        if (Test-Path -LiteralPath $pkgJson) {
+            try {
+                $pkgName = [string](Get-KitJsonProp (ConvertFrom-Json -InputObject (Get-KitTextFile -Path $pkgJson)) 'name')
+            } catch { $pkgName = '' }
+        }
+        if ($pkgName -eq '') {
+            throw ("refusing to create a link over an existing plain directory: {0}" -f $LinkPath)
+        }
+        $removed = Remove-KitDirectoryLink -Path $LinkPath -PackageName $pkgName
+        if ($removed -ne 'dir-removed') {
+            throw ("refusing to create a link over an existing plain directory: {0}" -f $LinkPath)
+        }
+        Write-KitLog WARN ('replaced a stale copied bundle directory with a link: {0}' -f $LinkPath)
     }
 
     $mklink = Invoke-KitNative -FilePath $env:ComSpec -Arguments @('/c', 'mklink', '/J', $LinkPath, $TargetPath)

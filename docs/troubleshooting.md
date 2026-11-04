@@ -35,6 +35,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1
 ```
 判据是"**+32**"，不是工具总数：总数随 DSH 版本变，别拿旧文档的绝对数当标准（doctor 第 7 项就是按 32 判的）。另外确认这个会话用的确实是 `Vivado` 预设——`standard` 会话**没有**这些工具，这是设计。
 
+#### 2.2.1 昨天还好，DSH 自动升级后 32 个工具全没了（2026-11-04 实测）
+
+- 现象：`Vivado` 预设还在、persona 与技能都正常，但一个 `mcp__vivado__*` 都没有；`doctor.ps1` 第 12 项
+  **`[FAIL] compatibility`**（rc.5 起是 FAIL，以前只是 WARN），detail 形如
+  `exemption "...@0.1.7-rc.2" lists [0.2.1-rc.2, 0.2.1-rc.3] instead of the runtime version 0.2.1-rc.5`。
+- 原因：DSH 升级把**运行时版本**改了，而 `compatibility.json` 里"允许的运行时版本"数组没跟着变 ⇒
+  profile 加载时 `mcp-vivado` 行被**静默丢掉**。表里只有旧版本时，`--dump-config` 依然全绿（它不校验这张表）。
+- 修法（二选一）→ **重启宿主**：
+```powershell
+# ① 重跑安装器（会自动 merge 当前运行时版本，并备份旧表）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Profile desktop
+# ② 或手工补一个值（键名 = profile 里 mcp-client 的版本，值里加当前运行时版本）
+#    "@deepseek-ai/dsh-mcp-client@0.1.7-rc.2": ["0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.5"]
+```
+- 复核：`powershell -File .\doctor.ps1` 第 12 项转 PASS；重启后新开 `Vivado` 会话，工具面应 **+32**。
+- 下次升级前可先跑一次 doctor：第 12 项 FAIL 就等于"这次升级会让工具消失"，不必等会话里发现。
+
 ### 2.11 预设、技能都正常，但一个 `mcp__vivado__*` 工具都没有（`doctor` 第 7 项却是 32）
 
 - 现象：`Vivado` 预设存在、persona 与 8 个技能都正常，工具数却是 **0**；`doctor.ps1` 第 6/7/12 项全 PASS；

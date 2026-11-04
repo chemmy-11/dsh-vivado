@@ -112,7 +112,7 @@ The four most common cases (full list in [`docs/troubleshooting.md`](docs/troubl
 | Symptom | First thing to do |
 |---|---|
 | No `Vivado` preset after restart | Confirm you really restarted; confirm you installed into the profile you are opening (`-Profile`); then run `doctor.ps1` and read checks 9/10 |
-| Preset exists but there is no `mcp__vivado__*` tool at all | Usually the `compatibility.json` version exemption is missing → re-run `install.ps1` (**without** `-SkipCompatibility`) and restart |
+| Preset exists but there is no `mcp__vivado__*` tool at all (including right after a DSH auto-update) | Usually the `compatibility.json` version exemption is missing → re-run `install.ps1` (**without** `-SkipCompatibility`) and restart; `doctor.ps1` check 12 names it explicitly |
 | `start_session` fails / Tcl reports `File not found` | Almost always a **non-ASCII path**; `doctor.ps1` check 5 names the offending config key |
 | `xdc_lint` / `get_cdc_report` details are truncated | The optional `patches/vivado-mcp` patches are not applied (they are never applied automatically) — see [`patches/vivado-mcp/README.md`](patches/vivado-mcp/README.md) |
 

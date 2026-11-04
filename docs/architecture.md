@@ -107,9 +107,10 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 ## 6. `compatibility.json`：一行版本豁免
 
 - 它是一张「`包@装的版本` → 允许的 DSH 版本数组」的 JSON（`docs/install.md:124`）。
-- 为什么需要：profile 解析到的 `@deepseek-ai/dsh-mcp-client` 版本与宿主运行时版本不同时（本机实测 `0.1.7-rc.2` vs `0.2.1-rc.2`），DSH 加载 profile 时会**静默丢掉** `mcp-vivado` 那一行——预设还在，32 个工具没了。
-- 豁免值必须是运行时版本串 `0.2.1-rc.2`：安装器优先取 `dsh.cmd --version`（正则抽版本，保留预发布后缀），拿不到才退 exe 的 `FileVersion`；`ProductVersion`（`0.2.1.0`，丢了 `-rc.2`）只作最后的兜底，真用它写进表里就是写坏（`lib/install-helpers.ps1:203-232`）。
-- 一个必须知道的事实：`--dump-config` **不校验**它。本机实测：把 `compatibility.json` 清空成 `{}`、甚至写成非法 JSON，dump 输出逐字节相同、退出码 0（`install.ps1:585-589`、`docs/install.md:147`）。所以第 8 步的 4 条标记**不能**替代这条判定，只有 doctor 第 12 项能判（它直接读文件，`doctor.ps1:1105`）。
+- 为什么需要：profile 解析到的 `@deepseek-ai/dsh-mcp-client` 版本与宿主运行时版本不同时（本机实测 `0.1.7-rc.2` vs `0.2.1-rc.5`），DSH 加载 profile 时会**静默丢掉** `mcp-vivado` 那一行——预设还在，32 个工具没了。
+- 豁免值必须是运行时版本串 `0.2.1-rc.5`：安装器优先取 `dsh.cmd --version`（正则抽版本，保留预发布后缀），拿不到才退 exe 的 `FileVersion`；`ProductVersion`（`0.2.1.0`，丢了 `-rc.5`）只作最后的兜底，真用它写进表里就是写坏（`lib/install-helpers.ps1:203-232`）。
+- **每次 DSH 升级都要重新 merge 一次**（2026-11-04 实测：宿主 rc.3 → rc.5，本机表里只有 rc.2/rc.3）：`install.ps1` 会把**当前**运行时版本 merge 进去，所以「升级 DSH 后重跑一次 install.ps1」是标准动作；不想重装也可以只补一行。doctor 第 12 项 2026-11-04 起把"判得了的缺失/过期"升成 **FAIL**（`doctor.ps1` 的 `Test-CheckCompatibility`），因为后果不是能力降级而是"预设的 32 个工具全没"。
+- 一个必须知道的事实：`--dump-config` **不校验**它。本机实测（rc.2 与 rc.5 两版都复核过）：把 `compatibility.json` 清空成 `{}`、甚至写成非法 JSON，dump 输出逐字节相同、退出码 0（`install.ps1:585-589`、`docs/install.md:147`）。所以组合检查的 4 条标记**不能**替代这条判定，只有 doctor 第 12 项能判（它直接读文件）。
 - 合并而不是覆盖：只加自己那一个键，其余键与允许版本原样保留；文件不是合法 JSON 时只 WARN、一个字节都不改（`install.ps1:585-609`）。
 
 ## 7. doctor 的 13 项：设计原则
@@ -117,7 +118,7 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 13 项的 id 与顺序固定在 `doctor.ps1:1273-1286`，与 [doctor 详解](doctor-checks.md) 一一对应。几条原则值得记住：
 
 1. **能证明才 FAIL**。判据宁可 WARN：`part` 拿不到 parts 树只 WARN（`doctor.ps1:569-572`）；`ascii-paths` 只有 cwd 非 ASCII 只 WARN（`:672-673`），因为 cwd 是 shell 位置，不是 kit 配置。
-2. **三项永不 FAIL**：`license`（`:818`，许可证可能来自浮动服务器、加密狗或评估模式，静态判不了）、`mcp-patches`（`:1035`，缺补丁只是能力降级）、`compatibility`（`:1105`，后果是 mcp 行被静默丢弃，仍是能力降级）。
+2. **两项永不 FAIL**：`license`（`:818`，许可证可能来自浮动服务器、加密狗或评估模式，静态判不了）、`mcp-patches`（`:1035`，缺补丁只是能力降级）。`compatibility` 在 2026-11-04 之前也是"永不 FAIL"，现改为**判得了才 FAIL**（缺失/过期 ⇒ 32 个工具会消失），判不了（没有 mcp-client / 版本来源不可靠）仍只 WARN。
 3. **还没装 ≠ 坏了**：profile 与 staging 都没有 kit 痕迹时，`bundle-installed` / `bundle-rendered` / `skills` 报 WARN（`doctor.ps1:933`、`:979`、`:1162`），这样使用者可以先体检、再安装。
 4. **`-Quick` 只跳过 3 个慢探针**：`vivado-version` 的 `vivado.bat -version`（`doctor.ps1:373`）、`mcp-import`（`:706`）、`mcp-tools`（`:754`）。被跳过的项报 WARN `skipped by -Quick`，不是 PASS。
 5. **崩溃兜底**：`license`、`mcp-patches` 在 `$checkList` 里是 `Soft=$true`，检查函数自身抛异常时降级成 WARN；其余项崩溃会变成 FAIL（`doctor.ps1:1290-1305`）。
@@ -164,6 +165,7 @@ bundle 在「设置 → 插件」里显示的标题、描述和图标**不来自
 | 改 persona 分档内容 | `templates/persona/2023.1.frag.yml` 与 `2025.2plus.frag.yml`（两档都改，否则同一份纪律会在两档漂移） | 渲染一次确认块标量完好；`doctor.ps1` 第 10 项 |
 | 新增/改名占位符 | `tools/render_patch.ps1` 的 `$values`、`tools/make_template.py` 的 `EXPECTED_PLACEHOLDERS`、模板或片段 | 两个 `--check` + 渲染 + `doctor.ps1` |
 | 加/改一个运行辅助脚本 | `tools/vivado-*.ps1`；公共件在 `lib/common.ps1`（`Find-KitVivadoBat` / `New-KitAsciiWorkDir` / `Write-KitBatchLauncher` / `Get-KitBatchExitCode`）。**不要**改回 `Start-Process -PassThru` 取退出码 | 真跑 `tools/vivado-probe.ps1`（`PROBE_RESULT=OK`）+ `tools/tcl-check.ps1` 对一个 `.tcl` 目录（`TCLCHECK_RESULT=PASS`）+ `doctor.ps1` |
+| **适配新一代 DSH（宿主升了版本）** | 仓库文件可能一行都不用改：先在隔离 home 里 `py dev\accept_all.py --only install`（组合 4 标记 + **schema 两条门禁** + 幂等），再 `doctor.ps1` 第 12 项。若 shipped preset 行有变 → 按 `dev/README.md` §2.4 做结构 diff、重生成模板与审计件 | `py dev\accept_all.py --only install,doctor`；`doctor.ps1`；结论登记进 `docs/version-matrix.md`（或对应版本说明） |
 
 门禁按这个顺序跑（前一步不过就不用跑后面）：
 
@@ -173,6 +175,8 @@ py tools\gen_skills_manifest.py --check    # skills/MANIFEST.json 是否漂移
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\vivado-probe.ps1     # 会真起一次 Vivado（~15s）
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\tcl-check.ps1 .\templates
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -RenderOnly   # 只 staging + 渲染，自检在渲染器里
+py dev\accept_all.py --only install          # 隔离 home 里真装 + 组合 4 标记 + schema 两条门禁
+py dev\validate_schema.py --schema <home>\schema.json --patch <home>\bundles\dsh-vivado\cordis.patch.yml
 powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1 -Json          # 13 项机器可读
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf       # 真装之前先看完整计划，不改任何字节
 ```

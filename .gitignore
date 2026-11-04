@@ -10,3 +10,7 @@
 # Never part of a bundle
 /node_modules/
 /.git/
+
+# Python bytecode (dev/ tools/ are run in place by the gates)
+__pycache__/
+*.pyc
