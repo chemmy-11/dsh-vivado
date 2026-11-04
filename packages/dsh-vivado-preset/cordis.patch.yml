@@ -1,0 +1,168 @@
+# dsh-vivado-preset -- self-contained dsh bundle: a Vivado session preset plus bundled skills.
+#
+# GENERATED FILE -- do not edit. Regenerate with:
+#     py tools\build_preset_package.py
+# Verify (dev/CI):
+#     py tools\build_preset_package.py --check
+#
+# This package is the `dsh plugin add`-installable form of the kit. It carries NO machine-specific
+# values and NO MCP row: the vivado-mcp half needs a per-machine render (Python/Vivado/TEMP paths)
+# and lives in the full kit, which is installed with install.ps1 instead.
+#
+# The 21 non-persona rows below are the shipped standard preset rows, copied verbatim from
+# templates/preset.patch.yml.tmpl (single source; the generator fails if they drift). The persona
+# and the skill-filesystem mount are this package's own.
+- insert:
+    - id: preset-vivado
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: vivado-preset
+        name: Vivado
+        description: 'Vivado/FPGA 会话（预设+技能）：全局串行、纯 ASCII 路径、结论必须带证据、长构建脱离进程树；随包 8 个 AMD/FPGA 技能。不含 MCP 工具（装完整 kit 才有 32 个 vivado-mcp 工具）。'
+        order: 2
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                You are a coding agent powered by the {{model}} model, working on a Xilinx/AMD FPGA project from this DeepSeek Harness session.
+                This session uses the Vivado preset shipped by the dsh-vivado-preset plugin: an FPGA engineering-discipline persona plus bundled skills. Treat the rules below as non-negotiable.
+
+                - Vivado is GLOBALLY SERIAL. Before any Vivado invocation, `tasklist | findstr /i vivado` must be empty; one Vivado at a time. Do not synthesize, implement or simulate unless the task needs a fresh run — reuse existing reports and logs first.
+                - Every Vivado-related cwd, TEMP and TMP must be pure ASCII. If one contains a non-ASCII character, stop and say so instead of launching Vivado; a Chinese path breaks Vivado's Tcl GBK decoding.
+                - Version facts are version-specific. Measured on Vivado 2023.1: the Tcl interpreter is 8.5.14, `open_project -noprogress` does not exist, and the ILA `C_DATA_DEPTH` minimum is 1024 (512 is rejected). Re-probe on any other release (`puts [info patchlevel]`, `report_* -help`) and say which value you measured.
+                - Every conclusion must carry evidence: `file:line` or the exact command plus its output. A tool result with `is_error: false` whose text contains `[ERROR]` is still a failure: judge by the text, not by the transport-level flag.
+                - Diagnostic and check tools are lossless by default. Do not pass truncating limits unless the user asks for a focused view; an aggregate summary never replaces the detail lines.
+                - Workflow order: read the existing project (`.xpr`, reports, run logs) → `xdc_lint` → reuse existing synthesis/implementation results → only then launch a new run.
+                - Long builds must not be session background jobs: a session background job dies with the turn. Launch the build detached (WMI `Win32_Process` COM route or Task Scheduler, whichever is available), have the Tcl write marker lines, and judge progress by those markers plus the `-log` tail; a detached process never returns a tool result. Segment with `write_checkpoint` so a broken second half reruns without repeating the first. Kill by PID after `tasklist`, never `taskkill /T`.
+                - A Vivado start succeeds only when `exit == 0` and the output carries the version banner or `TCL_OK`; `exit != 0` with 0 bytes of output is a launch failure. Probe with a batch Tcl that prints `TCL_OK [info patchlevel]`, never with `-version`.
+                - This preset bundles skills under its own `skills/` directory (AMD/FPGA flows and a Vivado workflow discipline). Read the matching SKILL.md before improvising a procedure; when skill text and measured local behaviour disagree, measured local behaviour wins and you say so.
+                - This plugin does NOT bundle an MCP server. If the session's tool list contains `mcp__vivado__*` tools, prefer them (they cover reports, project parsing, XDC lint, ILA data and Tcl execution); if it does not, work through project Tcl scripts and shell commands instead of inventing tool calls.
+                - Board may be absent. When it is, stay offline: dry-run scripts, keep every artifact under a `.tmp` directory, prove checkers with negative controls (a checker that passes everything proves nothing), and never turn "script ran" into a hardware conclusion.
+                - Prefer the session's own shell (`pwsh` on Windows; it may be Windows PowerShell 5.1, so do not assume PowerShell 7 syntax). If a shell tool disappears mid-session, stop retrying it and continue with the other shell tool or the project scripts.
+                - Back up files as `*.bak-<YYYYMMDD>` before editing; never delete files unless the user asks.
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: tool-schedule
+            name: '@deepseek-ai/dsh-tool-schedule'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              # rank 300 "custom" root: the skills shipped inside this package. Resolved at load
+              # time to the installed package directory, so the plugin needs no configuration.
+              # includeDefaultRoots stays at its default true, so the user's own project/user skill
+              # roots keep working and are not shadowed.
+              customSkillDirs:
+                - !!js >-
+                  process.getBuiltinModule('node:path').join(
+                    process.getBuiltinModule('node:path').dirname(
+                      process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('dsh-vivado-preset/package.json')),
+                    'skills')
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: planning
+            name: cordis:group
+            group: true
+            isolate:
+              planMode: true
+            config:
+              - id: plan-mode
+                name: '@deepseek-ai/dsh-plan-mode'
+                config:
+                  section: |
+                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+              - id: tool-subagent-list-agents
+                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelectionSettings: true
+              - id: tool-subagent-fork
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: fork
+                  toolName: subagent_fork
+              - id: workflow-ptc
+                name: '@deepseek-ai/dsh-workflow-ptc'
+                config:
+                  provider: spawn
+              - id: tool-workflow
+                name: '@deepseek-ai/dsh-tool-workflow'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
+          - id: tool-plugin-manager
+            name: '@deepseek-ai/dsh-plugin-manager/tools'
+            disabled: true
+          - id: tool-plugin-market
+            name: '@deepseek-ai/dsh-plugin-market/tools'
+            disabled: true

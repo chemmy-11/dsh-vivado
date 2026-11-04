@@ -85,6 +85,24 @@ renders the bundle patch there from your configuration, and registers that layer
 does **not** write `~/.dsh/skills`, needs **no** administrator rights, and rolls back automatically
 if any step fails.
 
+### No installer? The preset + skills-only package
+
+The full kit's patch is rendered per machine (Vivado path, Python, TEMP, project root), so it cannot be
+installed with `dsh plugin add`. The repo also ships a **self-contained subpackage**
+`packages/dsh-vivado-preset/` — the preset (persona + the standard plugin rows) plus the eight skills,
+no configuration, no MCP tools. Install **either** this **or** the full kit:
+
+```sh
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
+# or the prebuilt tarball from the release
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+```
+
+Restart the host and start a new session with the `Vivado` preset: you get the discipline persona and the
+eight AMD/FPGA skills (no `mcp__vivado__*` tools). Regenerate/verify with
+`py tools\build_preset_package.py [--check]`; design notes in [`docs/architecture.md` §4.1](docs/architecture.md)
+(Chinese).
+
 ## Using it
 
 1. New session → preset **`Vivado`** (a `standard` session has no `mcp__vivado__*` tools; that is intentional).

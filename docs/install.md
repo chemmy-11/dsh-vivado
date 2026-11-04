@@ -111,6 +111,23 @@ powershell -ExecutionPolicy Bypass -File D:\dsh-vivado\install.ps1   # 幂等：
   preset 行 id（`preset-vivado`），**不要同时装**。正确顺序是先移除旧的（`dsh plugin --profile <p> remove <旧包名>`，
   或会话里 `plugin_manager` 的 `remove_bundle`），再装本包；装完 `--dump-config` 里 `preset-vivado` 应当只出现一次。
 
+### 1.6 只要"预设 + 技能"：用独立子包（不需要安装器）
+
+完整 kit 的 patch 是按机器渲染的，所以它不能 `dsh plugin add`；仓库里的
+`packages/dsh-vivado-preset/` 是自包含子包（预设 + 8 个技能，无 MCP、无机器路径），
+可用 `dsh plugin add` 直接装：
+
+```sh
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
+# 或预构建 tarball（Release 资产）
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+```
+
+- 装完**重启宿主**，新会话选 `Vivado`（预设 id 是 `vivado-preset`）。
+- **不要与完整 kit 同时装**：两者显示的预设名都是 `Vivado`（id 不同），完整 kit 已包含这里的一切，且多 32 个 MCP 工具。
+- 升级/卸载走 dsh 自己的插件管理（`dsh plugin --profile <p> remove dsh-vivado-preset`），不经过本仓库的 `install.ps1`/`uninstall.ps1`。
+- 子包由 `py tools\build_preset_package.py` 从模板与 `skills/` 生成，`--check` 保证不漂移；设计说明见 `docs/architecture.md` §4.1。
+
 ## 2. `config.yml`（扁平 `key: value`，不需要 YAML 模块）
 
 ```yaml

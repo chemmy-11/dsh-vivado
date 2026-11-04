@@ -77,6 +77,21 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -WhatIf
 bundle 补丁、把这一层注册进你的 profile（改之前备份 `*.bak-<日期>`）。它**不改**你的 `cordis.patch.yml`、
 **不写** `~/.dsh/skills`、**不需要**管理员权限，任何一步失败会自动回滚。
 
+### 不想跑安装器？只要"预设 + 技能"的独立包
+
+完整 kit 的补丁是按机器现场渲染的（Vivado 路径、Python、TEMP、工程根），所以它不能直接 `dsh plugin add`。
+仓库里另有一个**自包含子包** `packages/dsh-vivado-preset/`，只含预设（persona + 标准插件行）与 8 个技能，
+零配置、不含 MCP 工具，可直接安装（与上面的完整 kit **二选一**）：
+
+```sh
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
+# 或从 Release 的预构建 tarball 安装
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+```
+
+重启宿主 → 新建会话选 `Vivado`，即可得到 discipline persona + 8 个 AMD/FPGA 技能（`mcp__vivado__*` 不会出现）。
+生成/校验：`py tools\build_preset_package.py [--check]`；设计说明见 [`docs/architecture.md` §4.1](docs/architecture.md)。
+
 ## 装完怎么用
 
 1. 新建会话 → 预设选 **`Vivado`**（`standard` 会话是没有 `mcp__vivado__*` 工具的，这是故意的）。

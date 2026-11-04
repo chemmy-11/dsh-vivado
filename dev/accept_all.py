@@ -370,10 +370,10 @@ def print_guard(profile: Path, fp) -> None:
 
 
 # ---------------------------------------------------------------------------
-#  static group (8)
+#  static group (10)
 # ---------------------------------------------------------------------------
 def group_static() -> bool:
-    print("\n== static: template / renderer / skills / hygiene ==")
+    print("\n== static: template / renderer / skills / preset package / hygiene ==")
     ok = True
     py = sys.executable
 
@@ -382,6 +382,11 @@ def group_static() -> bool:
 
     rc, out, err, _ = run([py, str(KIT / "tools" / "gen_skills_manifest.py"), "--check"])
     ok &= record("skills MANIFEST --check", rc == 0, "" if rc == 0 else tail(out + err, 6))
+
+    # The `dsh plugin add`-installable half (packages/dsh-vivado-preset) is generated from the same
+    # template and skills, so it can silently drift if either side is edited alone.
+    rc, out, err, _ = run([py, str(KIT / "tools" / "build_preset_package.py"), "--check"])
+    ok &= record("standalone preset package --check", rc == 0, "" if rc == 0 else tail(out + err, 6))
 
     # Both persona tiers must render AND validate: a fragment edited on one tier only is a
     # silent behavioural drift between 2023.1 and 2025.2plus.
@@ -437,13 +442,16 @@ def group_static() -> bool:
 
     # Distribution red line: no author home path, no leftover developer account name in any
     # text file that ships. `dev/` is the maintainer's own harness (not installed by install.ps1)
-    # and `skills/` is vendored upstream content, so both are exempt.
+    # and every `skills/` tree is vendored upstream content (the kit root and the generated copy
+    # inside packages/<pkg>/skills), so those are exempt.
     leaked = []
     for path in KIT.rglob("*"):
         if not path.is_file():
             continue
         rel = path.relative_to(KIT)
         if rel.parts and rel.parts[0] in ("skills", "dev"):
+            continue
+        if len(rel.parts) >= 3 and rel.parts[0] == "packages" and rel.parts[2] == "skills":
             continue
         if ".git" in rel.parts:
             continue

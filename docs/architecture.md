@@ -79,6 +79,25 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 - **版本档位**：`vivado_version` 去掉非数字字符后按 `[version]` 比较，`>= 2025.2` 用 `2025.2plus`，否则 `2023.1`；片段不存在直接 `throw`（`tools/render_patch.ps1:76-87`）。两档的实测/未实测界线见 [版本分档](version-matrix.md) §1。
 - **渲染后自检**（`tools/render_patch.ps1:142-160`）：① 除 `{{model}}` 外无残留占位符；② 有顶层 `- insert:`；③ 恰好 23 条 `- id:` 且含 `persona` / `skill-filesystem` / `mcp-vivado`；④ persona 的 `prefix:` 是 `|` 缩进块标量。渲染前另有一道 ASCII 守卫，8 个路径值出现非 ASCII 直接 `throw`；输出强制 LF、UTF-8 无 BOM。
 
+### 4.1 例外：`packages/dsh-vivado-preset`（可 `dsh plugin add` 的独立形态）
+
+上面说的是**完整 kit**——它没法预置 patch。但社区插件列表（awesome-dsh-plugin）只收
+"`dsh plugin add` 能装、不跑安装器"的插件，所以仓库里另有一个**自包含子包**：
+
+| 项 | 内容 |
+|---|---|
+| 路径 | `packages/dsh-vivado-preset/`（一个独立的 dsh bundle，`dsh.bundle.patch: ./cordis.patch.yml`） |
+| 内容 | 预设 `Vivado`（`id: vivado-preset`，`order: 2`）= persona（通用版，无机器值）+ shipped 21 行 + `skill-filesystem` 挂载本包 `skills/`（8 个技能副本） |
+| 不含 | `mcp-vivado` 行、`tools/*.ps1`、安装器、`config.yml` —— 因此**没有**任何机器路径要填 |
+| 技能路径怎么定 | `customSkillDirs: [!!js ...]`：`createRequire(baseUrl).resolve('dsh-vivado-preset/package.json')` → 取目录 → `join('skills')`；安装在哪都能解析到本包目录（与 shipped standard preset 挂自己 `bundledSkillDir` 的模式相同） |
+| 生成 | `py tools\build_preset_package.py`（读 `templates/preset.patch.yml.tmpl` 的 shipped 行 + `skills/`，写 patch 与技能副本）；`--check` 断言与源逐字节一致，已接入 `dev/accept_all.py` 的 `static` 组 |
+| 与完整 kit 的关系 | **二选一**：两者显示的预设名都是 `Vivado`，但 id 不同（`vivado` vs `vivado-preset`）；完整 kit 多 32 个 MCP 工具与两档 persona，独立包只保证"装完即得预设+技能" |
+| 验证 | 隔离 home：`dsh plugin --profile probe add file:<tgz|目录>` → `--dump-config` 出现 `preset-vivado`、`mcp-vivado` 为 0、schema 0 violations；技能表达式用 Node 按同一 `baseUrl` 求值 → 8 个 `SKILL.md`（见 `dev/README.md` §5 的"未覆盖"条目：真会话仍需重启宿主确认） |
+
+> 为什么不在仓库根直接放一份 patch：根 patch 会被 `install.ps1` 的渲染链路与 `.gitignore`
+> 当作**产物**；把它变成"可安装输入"会让同名的两种用途互相踩。独立子包把"零配置可装"的
+> 那半单独隔离出来，完整 kit 的渲染链路保持原样。
+
 ## 5. 安装链路：`install.ps1` 的 9 步
 
 `install.ps1` 用 9 个 `[STEP]` 行推进（行号即实现位置）：`1/9 resolve config`（`:169`）→ `2/9 detect values`（`:191`）→ `3/9 check profile`（`:390`）→ `4/9 stage the kit`（`:407`）→ `5/9 persist the values that were actually used`（`:411`）→ `6/9 render the bundle patch`（`:438`）→ `7/9 install the bundle`（`:473`）→ `8/9 verify`（`:616`）→ `9/9 done`（`:642`）。

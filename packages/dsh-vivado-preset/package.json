@@ -1,0 +1,37 @@
+{
+  "name": "dsh-vivado-preset",
+  "version": "0.2.0",
+  "description": "Vivado session preset for DeepSeek Harness: a version-aware FPGA engineering-discipline persona plus eight bundled AMD/FPGA skills. Installable with dsh plugin add; no Vivado installation required to install the preset.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "cordis.patch.yml",
+    "skills",
+    "persona.txt",
+    "README.md",
+    "LICENSE",
+    "NOTICE-preset.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chemmy-11/dsh-vivado.git",
+    "directory": "packages/dsh-vivado-preset"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "vivado",
+    "fpga",
+    "agent-preset",
+    "skills"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "engines": {
+      "dsh": ">=0.2.1-rc.2"
+    }
+  }
+}
