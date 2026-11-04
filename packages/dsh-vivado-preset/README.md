@@ -24,11 +24,12 @@ no Vivado installation are required to install the preset itself**.
 ## Install
 
 ```sh
-# from GitHub (monorepo subpackage)
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
-
-# or from the prebuilt tarball attached to the release
+# preferred: the prebuilt tarball attached to the release (no local HTTPS git needed)
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+
+# alternative: the GitHub subdirectory URL (pnpm resolves it over HTTPS git; a host that can
+# only reach github.com over SSH fails here -- use the tarball above)
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
 ```
 
 Then **restart the host** (Electron has no hot reload) and start a new session with the `Vivado` preset.

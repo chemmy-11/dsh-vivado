@@ -84,9 +84,10 @@ bundle 补丁、把这一层注册进你的 profile（改之前备份 `*.bak-<�
 零配置、不含 MCP 工具，可直接安装（与上面的完整 kit **二选一**）：
 
 ```sh
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
-# 或从 Release 的预构建 tarball 安装
+# 推荐：Release 预构建 tarball（不依赖本机 HTTPS git）
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+# 备选：GitHub 子目录 URL（pnpm 会走 HTTPS git；本机 HTTPS 只通 SSH 时会失败，用上面的 tarball）
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
 ```
 
 重启宿主 → 新建会话选 `Vivado`，即可得到 discipline persona + 8 个 AMD/FPGA 技能（`mcp__vivado__*` 不会出现）。

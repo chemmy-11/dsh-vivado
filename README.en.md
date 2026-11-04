@@ -93,9 +93,11 @@ installed with `dsh plugin add`. The repo also ships a **self-contained subpacka
 no configuration, no MCP tools. Install **either** this **or** the full kit:
 
 ```sh
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
-# or the prebuilt tarball from the release
+# preferred: the prebuilt tarball from the release (no local HTTPS git needed)
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+# alternative: the GitHub subdirectory URL (pnpm resolves it over HTTPS git; environments that
+# can only reach github.com over SSH fail here -- use the tarball above)
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
 ```
 
 Restart the host and start a new session with the `Vivado` preset: you get the discipline persona and the
