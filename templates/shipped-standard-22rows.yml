@@ -2,18 +2,18 @@
 #
 # This file exists to prove that the 22 plugin rows inside the rendered patch are the shipped
 # `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` content, not hand-copied text.
-# Source: the previously verified project-local bundle patch
-#   作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml
-#   (proven byte-identical to the shipped preset in
-#    作者本机的规范化取证记录（未随仓库发布） §2.2)
+# Source: <DSH>/resources/app.asar
+#   :: dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml
+#   (extracted from the installed DSH; replay:
+#    py tools\make_template.py --sync-shipped --dsh-install <DSH>)
 # Rows 2-22 below are byte-identical to that source (line endings normalized to LF).
-# The persona row is intentionally replaced by a comment: the pre-kit persona was OUR text and
-# carried the author's absolute paths, so it must not travel inside a distributed kit.
+# persona row omitted from this audit copy: the shipped persona row is replaced at render time
+# by templates/persona/<tier>.frag.yml, so it is not kit content.
 # sha256 of the full verbatim 22 rows (persona included, LF-normalized):
 
-#   903077529fcf61d727dc363c2f7832077f1b3a95df3d34998a035943553252a3
-          # <persona row omitted from this audit copy: the pre-kit persona carried the author's absolute paths.>
-          # <It is replaced by templates/persona/<tier>.frag.yml at render time.>
+#   b6fe694d5de6c0c91237959cbb61b7d00dc1492391c0c7a8987e7d5e204a12fa
+          # <persona row omitted from this audit copy: the shipped persona row is replaced
+          #  at render time by templates/persona/<tier>.frag.yml, so it is not kit content.>
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:
@@ -28,6 +28,9 @@
             disabled: !!js process.platform !== 'win32'
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              # Set false to drop the apply_patch tool beside edit.
+              applyPatch: false
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
             config:
@@ -90,14 +93,13 @@
             config:
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
-              - id: tool-subagent-list-agents
-                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-                  modelSelectionSettings: true
+                  modelSelection: true
+                  modelDiscovery: true
               - id: tool-subagent-fork
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
@@ -124,7 +126,7 @@
             name: '@deepseek-ai/dsh-tool-present'
           - id: tool-plugin-manager
             name: '@deepseek-ai/dsh-plugin-manager/tools'
-            disabled: true
+            disabled: !!js "!ctx.get('profileContext')"
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true

@@ -130,33 +130,50 @@ py <kit>\dev\accept_all.py --keep-home                         # 复用已建好
 退出码：`0` = 全过且真实 profile 一字节没动；`1` = 有 `[FAIL]`（或 `[GUARD]` 报真实 profile 被改）；
 `2` = 环境问题（缺入口文件、scratch 路径非 ASCII、探不到 DSH CLI、`--only` 写了不存在的组）。
 
-`[GUARD]` 是**矩阵之外**的一条守卫，不占 53 条里的名额：跑之前给真实 profile 的
+`[GUARD]` 是**矩阵之外**的一条守卫，不占 54 条里的名额：跑之前给真实 profile 的
 `package.json` / `pnpm-lock.yaml` / `compatibility.json` / `cordis.patch.yml` 记 `mtime+sha256`，
 再给 `%USERPROFILE%\.dsh\skills` 记一份目录指纹，跑完比对，不一致就把它点名并把退出码打成 1。
 
 ### 2.4 适配新一代 DSH（改了哪一步、为什么）
 
-DSH 升级会改**组合行为**而不改我们仓库里的任何一个文件（2026-11-04 实测：0.2.1-rc.3 → rc.5
-的 shipped preset 行其实**一行没变**，但 `node_modules` 的解析次序变了，探针 home 里一份
-"被 robocopy 解引用"的旧 bundle 副本压过了 profile 依赖，装完的组合检查直接失败）。固定动作：
+DSH 升级会改**组合行为**，也可能改它自带的 shipped preset（22 行）；后者不改我们仓库的源文件就会静默带过时行。两次实测：
+
+- **2026-11-04 0.2.1-rc.3 → rc.5**：shipped preset 行**一行没变**，但 `node_modules` 的解析次序变了，
+  探针 home 里一份"被 robocopy 解引用"的旧 bundle 副本压过了 profile 依赖，装完的组合检查直接失败（§8 的
+  `/XJ` + strip 就是那次的修复）。
+- **2026-11-06 0.2.1-rc.5 → 0.2.2-rc.1**：shipped 行**变了 3 处** —— ① `tool-fs` 加
+  `config.applyPatch: false`（丢掉 `apply_patch` 工具）；② `delegation` 组删掉 `tool-subagent-list-agents`，
+  `tool-subagent` 的 `modelSelectionSettings: true` 换成 `modelSelection` + `modelDiscovery`；
+  ③ `tool-plugin-manager` 的 `disabled` 从 `true` 变成 `!!js "!ctx.get('profileContext')"`。
+
+固定动作：
 
 ```powershell
-# 1) 先看运行时版本与本机豁免（doctor 第 12 项现在会 FAIL，不再只是 WARN）
+# 1) 先对**已装 DSH** 校 shipped 22 行（唯一机器可读入口：app.asar 里的 standard.patch.yml）
+py <kit>\tools\make_template.py --sync-shipped --check --dsh-install <DSH 安装根>
+#    有变就重生成模板 + 审计件，再看 diff 确认上游到底改了什么
+py <kit>\tools\make_template.py --sync-shipped --dsh-install <DSH 安装根>
+git -C <kit> diff templates/
+
+# 2) 运行时版本与本机豁免（doctor 第 12 项现在会 FAIL，不再只是 WARN）
 powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\doctor.ps1
 
-# 2) 隔离 home + 安装：组合 + schema 两条门禁都在 install 组里
+# 3) 隔离 home + 安装：组合 + schema 两条门禁都在 install 组里（schema 能提前抓「新 DSH 不认的配置键」）
 py <kit>\dev\accept_all.py --only install --home <work-dir>\probe-accept
 
-# 3) 单独验 schema（给了 DSH 的 --dump-config-schema 才有意义）
+# 4) 单独验 schema（给了 DSH 的 --dump-config-schema 才有意义）
 py <kit>\dev\validate_schema.py --schema <home>\schema.json --patch <home>\bundles\dsh-vivado\cordis.patch.yml
 py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dump-config.yml
 ```
 
-- **`--dump-config` 仍然不校验 `compatibility.json`**（老结论没变），只有 doctor 第 12 项读文件判；
+- **`--sync-shipped` 怎么拿到权威源**：Electron asar 头是公开格式（`u32 pickle 长度 / u32 头长度 /
+  u32 载荷长度 / u32 字符串长度 / JSON 头`），`make_template.py` 用 stdlib 的 `struct`+`json` 直接读
+  `<DSH>\resources\app.asar`，不需要 Node、也不需要作者本机的 bundle 源码。
+- **`--dump-config` 仍然不校验 `compatibility.json`**（0.2.2-rc.1 复验：把它清空成 `{}`、写成非法 JSON，
+  三份 dump 逐字节相同 `sha256 34f6f75d2f9a…`、均 rc=0），只有 doctor 第 12 项读文件判；
   rc.5 起第 12 项从 WARN 升成 **FAIL**：豁免缺失/过期 ⇒ 宿主静默丢掉 `mcp-vivado` 行 ⇒ 32 个工具全没了。
-- **「shipped preset 行有没有变」怎么查**：在隔离 home 里 `dsh --profile probe --dump-config`，
-  拿 `preset-standard` 的 `plugins` 与我们模板里的 22 行做结构 diff（2026-11-04 实测 rc.5：**0 处差异**）。
-  这不是脚本门禁（没有稳定的机器可读入口），是升级时的**人工确认项**，结论写进 `docs/version-matrix.md`。
+- **shipped 行变了的结论**写进 `docs/architecture.md` §6 与本文件 §2.4；`docs/version-matrix.md` 只记 Vivado
+  档位事实，不再往里塞 DSH 版本结论。
 
 ## 3. 安全边界
 
@@ -195,9 +212,9 @@ py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dum
 | 真实 Vivado 行为（综合、`xdc_lint`、ILA） | 需要 Vivado + license + 器件 | `doctor.ps1` 只判静态条件，深水区靠真机 |
 | `tools/vivado-probe.ps1` / `vivado-run.ps1` / `tcl-check.ps1` 的**真跑** | 会启动 Vivado（每次约 10-40 s），验收脚本刻意不碰 | 手工跑一次探针（`PROBE_RESULT=OK`）与 `tcl-check.ps1`（`TCLCHECK_RESULT=PASS`），见 [docs/architecture.md](../docs/architecture.md) §10 的门禁顺序 |
 | `compatibility.json` 是否被宿主真正采用 | 实测 `--dump-config` **不校验**它（见 [docs/architecture.md](../docs/architecture.md) §6） | `doctor.ps1` 第 12 项（rc.5 起该判定缺失/过期直接 **FAIL**）+ 真会话 |
-| `--dump-config-schema` 不存在的老版本 DSH | 不是每个 DSH 构建都暴露 schema | schema 两条断言记 `[SKIP]`（不是 PASS）；手工按 [docs/version-matrix.md](../docs/version-matrix.md) 登记 |
+| `--dump-config-schema` 不存在的老版本 DSH | 不是每个 DSH 构建都暴露 schema | schema 两条断言记 `[SKIP]`（不是 PASS）；手工登记到 [docs/architecture.md](../docs/architecture.md) §6 |
 | **`packages/dsh-vivado-preset` 的 `dsh plugin add` 真装** | 验收只证明"包生成正确 + 组合出 `preset-vivado` + `!!js` 技能表达式能解析到安装目录"（见 `docs/architecture.md` §12）；它不启动宿主、不建会话 | 在隔离 home 里 `dsh plugin add <tgz|tree-url>` 后重启宿主，新会话选 `Vivado`，确认技能列表出现 |
-| shipped preset 行与新版 DSH 的差异 | 没有稳定机器可读入口 | §2.4 的结构 diff 步骤 + `docs/version-matrix.md` 登记 |
+| shipped preset 行与新版 DSH 的差异 | 验收组不跑（只在维护者升级时查，不是用户侧门禁） | `py tools\make_template.py --sync-shipped --check --dsh-install <DSH>`：按 asar 里的 `standard.patch.yml` 逐字节比对（机器可读）；变了就 `--sync-shipped` 重生成，结论登记 [docs/architecture.md](../docs/architecture.md) §6 |
 | `2025.2+` 档的版本事实 | 本机未实测 | [docs/version-matrix.md](../docs/version-matrix.md) §5 |
 | pnpm/CLI 路径本身是否走通 | `install` 组跑 `-Mode auto`：CLI 失败会自动降级 `manual`，仍然 PASS | 看输出里是 `official CLI install finished` 还是 `falling back to the manual` |
 | 卸载后宿主是否真的「忘了」这一层 | 只有重启才知道 | 重启后 `doctor.ps1` + 预设列表 |
@@ -215,7 +232,7 @@ py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dum
 | `templates/preset.patch.yml.tmpl` | `static`，**两档都要过** | 模板一处漂移会同时影响两档 |
 | `templates/persona/<tier>.frag.yml` | `static`，**两档都要过** | 只改一档 = 两档纪律开始分叉（[docs/architecture.md](../docs/architecture.md) §10） |
 | `tools/vivado-*.ps1`、`lib/common.ps1` 的运行辅助段 | `--only static` + 手工真跑 `vivado-probe.ps1` / `tcl-check.ps1` | `static` 只验在场与 ASCII；真跑才会暴露 WinPS 5.1 的退出码/引号坑 |
-| `tools/make_template.py`、shipped 22 行审计件 | `--only static` | 模板/审计件/生成器三者互相钉死 |
+| `tools/make_template.py`、shipped 22 行审计件 | `--only static`；升级 DSH 后另跑 `--sync-shipped --check --dsh-install <DSH>` | 模板/审计件/生成器三者互相钉死；asar 同步检查保证 22 行跟着宿主走 |
 | `templates/preset.patch.yml.tmpl` 的 shipped 行、`skills/**` | `--only static`（含 `tools\build_preset_package.py`） | `packages/dsh-vivado-preset/` 是从这两处生成的，改一处不重生成 = 独立预设包漂移 |
 | `packages/dsh-vivado-preset/` 的 `persona.txt` / `README.md` / `package.json` | `--only static` + 隔离 home 里 `dsh plugin add` 一次 | 手写件不参与生成，但 `package.json` 的 `dsh.bundle` / 版本一致性由 `--check` 把关 |
 | `skills/**` | `--only static` + `doctor.ps1` 第 13 项 | `MANIFEST.json` 由生成器唯一产出，禁手写 |
@@ -231,6 +248,8 @@ py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dum
 # 0) 便宜的门禁（与 docs/architecture.md §10 一致）
 py <kit>\tools\make_template.py --check
 py <kit>\tools\gen_skills_manifest.py --check
+#    刚升过 DSH 就再加一条：shipped 22 行是否仍与已装 DSH 一致
+py <kit>\tools\make_template.py --sync-shipped --check --dsh-install <DSH 安装根>
 
 # 1) 静态组：10 条，几秒钟，不需要 DSH
 py <kit>\dev\accept_all.py --only static
@@ -238,7 +257,7 @@ py <kit>\dev\accept_all.py --only static
 # 2) 真装 + 真卸：隔离 DSH_HOME，27 条
 py <kit>\dev\accept_all.py --only install,uninstall --home <work-dir>\probe-accept
 
-# 3) 全量：6 组 53 条（自动探测 DSH；探测不到就加 --dsh-install <DSH 安装根>）
+# 3) 全量：6 组 54 条（自动探测 DSH；探测不到就加 --dsh-install <DSH 安装根>）
 py <kit>\dev\accept_all.py
 
 # 4) 真机：重启宿主 → 新会话选 Vivado → 数工具/技能（脚本管不到这一步）

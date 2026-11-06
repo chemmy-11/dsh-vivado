@@ -6,7 +6,7 @@
 
 ## 1. 一句话架构：一个配置型 bundle，只提供一条预设行
 
-本包**没有 Host/Client 入口代码**。`package.json` 只声明两件事：`dsh.bundle.patch` 指向 `./cordis.patch.yml`，`dsh.engines.dsh` 要求 `>=0.2.1-rc.2`（`package.json:27-34`）；没有 `main`/`exports`，也没有任何前端资源。装进 profile 后，它作为**patch 层**参与宿主启动时的组合，只贡献一条 preset 行，profile 自己的 `cordis.patch.yml` 不被改写（`docs/install.md:106-118`）。
+本包**没有 Host/Client 入口代码**。`package.json` 只声明两件事：`dsh.bundle.patch` 指向 `./cordis.patch.yml`，`dsh.engines.dsh` 要求 `>=0.2.2-rc.1`（`package.json`）；没有 `main`/`exports`，也没有任何前端资源。装进 profile 后，它作为**patch 层**参与宿主启动时的组合，只贡献一条 preset 行，profile 自己的 `cordis.patch.yml` 不被改写（`docs/install.md:106-118`）。
 
 ```text
 bundle patch（顶层只有 - insert:）
@@ -19,21 +19,21 @@ bundle patch（顶层只有 - insert:）
 
 ## 2. bundle patch 长什么样，22 行为什么要原样抽
 
-模板是 `templates/preset.patch.yml.tmpl`（175 行）：一条顶层 `- insert:`，其下**只有一行** `preset-vivado`；渲染后插件列表正好 23 条顶层行 = 22 条 shipped（persona 行由 `{{PERSONA_BLOCK}}` 展开）+ 末尾 `mcp-vivado`（`:14-21`、`:152-175`）。模板文件里 persona 还是占位符，所以模板侧只数得到 22 条 `- id:`。
+模板是 `templates/preset.patch.yml.tmpl`（158 行）：一条顶层 `- insert:`，其下**只有一行** `preset-vivado`；渲染后插件列表正好 23 条顶层行 = 22 条 shipped（persona 行由 `{{PERSONA_BLOCK}}` 展开）+ 末尾 `mcp-vivado`（`:15-23`、`:146-158`）。模板文件里 persona 还是占位符，所以模板侧只数得到 22 条 `- id:`。
 
 | 环节 | 事实 | 证据 |
 |---|---|---|
-| 行数断言 | 顶层插件行必须 23 条（10 空格缩进），`mcp-vivado` 必须最后一条 | `tools/make_template.py:71-83`；渲染器同样断言 `tools/render_patch.ps1:150-154` |
-| 22 行来源 | 从 DSH 自带的 shipped `standard.patch.yml` **原样抽取**，不手抄 | `templates/preset.patch.yml.tmpl:3-12`；审计件 `templates/shipped-standard-22rows.yml:1-14` |
-| 何时会变 | DSH 升级可能改 shipped 预设，22 行要重抽 | `tools/make_template.py:14-20`、`:289-319`（重抽需 `--source`） |
+| 行数断言 | 顶层插件行必须 23 条（10 空格缩进），`mcp-vivado` 必须最后一条 | `tools/make_template.py` 的 `split_sections()`（`:211-222`）；渲染器同样断言 `tools/render_patch.ps1:150-154` |
+| 22 行来源 | 从已装 DSH 的 `app.asar` 内 shipped `standard.patch.yml` **原样抽取**，不手抄 | 模板 `:3-10`；审计件 `templates/shipped-standard-22rows.yml:1-15`；提取器 `tools/make_template.py` 的 `read_asar_entry()` / `shipped_rows_block()`（`:148-198`） |
+| 何时会变 | DSH 升级可能改 shipped 预设（2026-11-06 实测 0.2.2-rc.1 改了 3 行），22 行要重抽 | `py tools\make_template.py --sync-shipped --dsh-install <DSH>`（`:349-383`）；`--check` 只比模板/审计件（`:388-456`） |
 
 为什么必须"原样抽"而不是手抄：
 
 1. 这 22 行里多数带 `config:`（例如 `agent-instructions.maxBytes`、`tool-fs-search.sampleOverCapGlobResults`、`tool-web.searchTimeoutMs`、`plan-mode.section`），任何一处漂移都会让预设行为悄悄变样，而 DSH 侧只认最终 patch；
-2. 生成器**只允许两处改动**：persona 行整块换 `{{PERSONA_BLOCK}}`（`tools/make_template.py:105-113`）、`skill-filesystem` 行加 `customSkillDirs`（`:121-136`）；末尾追加 `mcp-vivado` 行并把 6 个机器相关值参数化（`:138-180`），发现残留绝对路径直接拒绝生成（`:178-179`）；
-3. `py tools/make_template.py --check` 有两种判据：不带 `--source` 时做结构自检（行集、占位符集合、sha256 一致性，`tools/make_template.py:234-286`）；带 `--source` 时再与重生成结果逐字节比较（`:303-319`）。任一不过 exit 1。
+2. 生成器**只允许两处改动**：persona 行整块换 `{{PERSONA_BLOCK}}`（`tools/make_template.py:231-244`）、`skill-filesystem` 行加 `customSkillDirs`（`:245-252`）；末尾追加 `mcp-vivado` 行并把 6 个机器相关值参数化（`build()`，`:306-345`），发现残留绝对路径直接拒绝生成（`:277-281`）；
+3. `py tools/make_template.py --check` 有两种判据：不带 `--source` 时做结构自检（行集、模板/审计件逐行一致、占位符集合、sha256 一致性，`tools/make_template.py:388-456`）；带 `--source` 时再与重生成结果逐字节比较（`:471-483`）。任一不过 exit 1。
 
-审计件 `templates/shipped-standard-22rows.yml` **不是安装输入**：它存 21 行（persona 行以注释替身，因为 pre-kit 的 persona 里带作者机器路径），外加整 22 行归一 LF 后的 sha256；模板头部记录同一个 sha256（审计件 `:12-14`、模板 `:11-12`）。两份文件对不上时 `--check` 直接 FAIL（`tools/make_template.py:265-270`）。
+审计件 `templates/shipped-standard-22rows.yml` **不是安装输入**：它存 21 行（persona 行以注释替身：shipped 的 persona 行渲染时会被 kit 的版本分档片段替换，不属于随包内容），外加整 22 行归一 LF 后的 sha256；模板头部记录同一个 sha256（审计件 `:12-13`、模板 `:12-13`）。`--check` 会**逐行**还原比对模板与审计件（模板侧先删掉 `customSkillDirs` 插入段）、再比 sha256，任一不一致直接 FAIL（`tools/make_template.py` 的 `self_check()`，`:388-456`）。
 
 ## 3. 技能怎么挂上：rank 300 的 `customSkillDirs`
 
@@ -74,7 +74,7 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 | `{{KIT_VERSION}}` | `package.json` 的 `version` | 预设 description 里的包版本 |
 | `{{PART}}`、`{{PROJECT_ROOT}}`、`{{VIVADO_VERSION}}`、`{{VIVADO_PATH}}`、`{{PYTHON}}` | 同名 config 值 | 只出现在 persona 片段里，不直接出现在模板里 |
 
-- 模板层面的占位符是上表**前 9 个**（`PERSONA_BLOCK` … `KIT_VERSION`），`make_template.py --check` 把这个集合锁死（`tools/make_template.py:230-231`、`:271-273`）；其余（`PART`、`PROJECT_ROOT`、`VIVADO_VERSION`、`VIVADO_PATH`、`PYTHON`、`KIT_DIR`）只在 persona 片段中出现。渲染器的值表共 15 个键（`tools/render_patch.ps1` 的 `$values`）。
+- 模板层面的占位符是上表**前 9 个**（`PERSONA_BLOCK` … `KIT_VERSION`），`make_template.py --check` 把这个集合锁死（`tools/make_template.py:384-386`、`:440-443`）；其余（`PART`、`PROJECT_ROOT`、`VIVADO_VERSION`、`VIVADO_PATH`、`PYTHON`、`KIT_DIR`）只在 persona 片段中出现。渲染器的值表共 15 个键（`tools/render_patch.ps1` 的 `$values`）。
 - `{{model}}` 是 DSH 的提示词占位符，**故意不替换**（`tools/render_patch.ps1:19`、`:145`），因此它也不允许被当成"残留占位符"判死——doctor 第 10 项同样豁免它。
 - **版本档位**：`vivado_version` 去掉非数字字符后按 `[version]` 比较，`>= 2025.2` 用 `2025.2plus`，否则 `2023.1`；片段不存在直接 `throw`（`tools/render_patch.ps1:76-87`）。两档的实测/未实测界线见 [版本分档](version-matrix.md) §1。
 - **渲染后自检**（`tools/render_patch.ps1:142-160`）：① 除 `{{model}}` 外无残留占位符；② 有顶层 `- insert:`；③ 恰好 23 条 `- id:` 且含 `persona` / `skill-filesystem` / `mcp-vivado`；④ persona 的 `prefix:` 是 `|` 缩进块标量。渲染前另有一道 ASCII 守卫，8 个路径值出现非 ASCII 直接 `throw`；输出强制 LF、UTF-8 无 BOM。
@@ -126,10 +126,10 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 ## 6. `compatibility.json`：一行版本豁免
 
 - 它是一张「`包@装的版本` → 允许的 DSH 版本数组」的 JSON（`docs/install.md:124`）。
-- 为什么需要：profile 解析到的 `@deepseek-ai/dsh-mcp-client` 版本与宿主运行时版本不同时（本机实测 `0.1.7-rc.2` vs `0.2.1-rc.5`），DSH 加载 profile 时会**静默丢掉** `mcp-vivado` 那一行——预设还在，32 个工具没了。
-- 豁免值必须是运行时版本串 `0.2.1-rc.5`：安装器优先取 `dsh.cmd --version`（正则抽版本，保留预发布后缀），拿不到才退 exe 的 `FileVersion`；`ProductVersion`（`0.2.1.0`，丢了 `-rc.5`）只作最后的兜底，真用它写进表里就是写坏（`lib/install-helpers.ps1:203-232`）。
-- **每次 DSH 升级都要重新 merge 一次**（2026-11-04 实测：宿主 rc.3 → rc.5，本机表里只有 rc.2/rc.3）：`install.ps1` 会把**当前**运行时版本 merge 进去，所以「升级 DSH 后重跑一次 install.ps1」是标准动作；不想重装也可以只补一行。doctor 第 12 项 2026-11-04 起把"判得了的缺失/过期"升成 **FAIL**（`doctor.ps1` 的 `Test-CheckCompatibility`），因为后果不是能力降级而是"预设的 32 个工具全没"。
-- 一个必须知道的事实：`--dump-config` **不校验**它。本机实测（rc.2 与 rc.5 两版都复核过）：把 `compatibility.json` 清空成 `{}`、甚至写成非法 JSON，dump 输出逐字节相同、退出码 0（`install.ps1:585-589`、`docs/install.md:147`）。所以组合检查的 4 条标记**不能**替代这条判定，只有 doctor 第 12 项能判（它直接读文件）。
+- 为什么需要：profile 解析到的 `@deepseek-ai/dsh-mcp-client` 版本与宿主运行时版本不同时（本机实测 `0.1.7-rc.2` vs `0.2.2-rc.1`），DSH 加载 profile 时会**静默丢掉** `mcp-vivado` 那一行——预设还在，32 个工具没了。
+- 豁免值必须是运行时版本串 `0.2.2-rc.1`：安装器优先取 `dsh.cmd --version`（正则抽版本，保留预发布后缀），拿不到才退 exe 的 `FileVersion`；`ProductVersion`（`0.2.2.0`，丢了 `-rc.1`）只作最后的兜底，真用它写进表里就是写坏（`lib/install-helpers.ps1:203-232`）。
+- **每次 DSH 升级都要重新 merge 一次**（2026-11-04 实测：宿主 rc.3 → rc.5，本机表里只有 rc.2/rc.3；2026-11-06 实测：rc.5 → **0.2.2-rc.1**，本机表里只有 rc.2/rc.3/rc.5）：`install.ps1` 会把**当前**运行时版本 merge 进去，所以「升级 DSH 后重跑一次 install.ps1」是标准动作；不想重装也可以只补一行。doctor 第 12 项 2026-11-04 起把"判得了的缺失/过期"升成 **FAIL**（`doctor.ps1` 的 `Test-CheckCompatibility`），因为后果不是能力降级而是"预设的 32 个工具全没"。
+- 一个必须知道的事实：`--dump-config` **不校验**它。本机实测（rc.2、rc.5、0.2.2-rc.1 三版都复核过）：把 `compatibility.json` 清空成 `{}`、甚至写成非法 JSON，dump 输出逐字节相同、退出码 0（0.2.2-rc.1 实测 sha256 三份都是 `34f6f75d2f9a…`、均 rc=0；`install.ps1:585-589`、`docs/install.md:147`）。所以组合检查的 4 条标记**不能**替代这条判定，只有 doctor 第 12 项能判（它直接读文件）。
 - 合并而不是覆盖：只加自己那一个键，其余键与允许版本原样保留；文件不是合法 JSON 时只 WARN、一个字节都不改（`install.ps1:585-609`）。
 
 ## 7. doctor 的 13 项：设计原则
@@ -170,7 +170,7 @@ bundle 在「设置 → 插件」里显示的标题、描述和图标**不来自
 
 1. **Electron 宿主下 `dsh-hmr` 不生效**：profile 与 bundle patch 只在宿主**启动时**读。换版本档位、改 `config.yml`、重装 bundle，全都要重启（`docs/install.md:11`）。
 2. **会话里的 shell 不是本包能决定的**（2026-10-25 更正）：预设只挂官方 `pwsh`（Windows）/ `bash`（其它）；`win_bash` 这类第三方 shell 插件装了也不依赖，卸了也不影响。若官方 `pwsh` 被第三方插件中途摘掉（`unknown tool "pwsh"`），本包的处理是"换仍然存在的 shell 或走 MCP"，**不是**去适配那个插件（`docs/troubleshooting.md` §2.5）。
-3. **DSH 升级后 shipped 22 行可能变**：重跑 `py tools/make_template.py --source <你机器上已实证的 bundle patch>` 重抽模板与审计件，再跑 `--check`（`tools/make_template.py:14-20`、`:289-319`）。
+3. **DSH 升级后 shipped 22 行可能变**（2026-11-06 实测：0.2.1-rc.5 → 0.2.2-rc.1 改了 3 行）：跑 `py tools\make_template.py --sync-shipped --dsh-install <DSH 安装根>` 从已装 `app.asar` 重抽模板与审计件，`git diff templates/` 确认上游改了哪几行，再跑 `--check`（`tools/make_template.py` 的 `sync_shipped()`，`:349-383`）。
 4. **staging 是增量复制**：上一版有、新版已删的文件会残留在 staging；要绝对干净就先 `uninstall.ps1` 再 `install.ps1`（`docs/install.md:259`）。
 5. **不改第三方源码**：`<vivado-mcp>` 视为只读，补丁手动应用（`NOTICE` §2.1）。
 6. 本机**未实测**的项（例如 `2025.2+` 档全部版本事实）在 [版本分档](version-matrix.md) §5 单列，这里不重复，也不替代它。
@@ -179,17 +179,18 @@ bundle 在「设置 → 插件」里显示的标题、描述和图标**不来自
 
 | 想做的事 | 改哪里 | 必须跑的门禁 |
 |---|---|---|
-| 加一条**本包自己的**插件行（非 shipped） | 改生成器 `tools/make_template.py` 的拼装段，并同步两处行数断言（`tools/make_template.py:78-83`、`:102-103`）与渲染器断言（`tools/render_patch.ps1:150-154`），再重新生成模板；**不要**直接改渲染产物 `cordis.patch.yml` | 重生成后 `py tools/make_template.py --check`；渲染一次；`doctor.ps1` |
+| 加一条**本包自己的**插件行（非 shipped） | 改生成器 `tools/make_template.py` 的拼装段，并同步两处行数断言（`tools/make_template.py` 的 `split_sections()` `:211-222`、`compose()` `:228-229`）与渲染器断言（`tools/render_patch.ps1:150-154`），再重新生成模板；**不要**直接改渲染产物 `cordis.patch.yml` | 重生成后 `py tools/make_template.py --check`；渲染一次；`doctor.ps1` |
 | 加一个技能 | 新建 `skills/<name>/SKILL.md`，`name:` 必须等于目录名 | `py tools/gen_skills_manifest.py`（MANIFEST 由生成器唯一产出、禁手写）+ `--check`；`doctor.ps1` 第 13 项 |
 | 改 persona 分档内容 | `templates/persona/2023.1.frag.yml` 与 `2025.2plus.frag.yml`（两档都改，否则同一份纪律会在两档漂移） | 渲染一次确认块标量完好；`doctor.ps1` 第 10 项 |
 | 新增/改名占位符 | `tools/render_patch.ps1` 的 `$values`、`tools/make_template.py` 的 `EXPECTED_PLACEHOLDERS`、模板或片段 | 两个 `--check` + 渲染 + `doctor.ps1` |
 | 加/改一个运行辅助脚本 | `tools/vivado-*.ps1`；公共件在 `lib/common.ps1`（`Find-KitVivadoBat` / `New-KitAsciiWorkDir` / `Write-KitBatchLauncher` / `Get-KitBatchExitCode`）。**不要**改回 `Start-Process -PassThru` 取退出码 | 真跑 `tools/vivado-probe.ps1`（`PROBE_RESULT=OK`）+ `tools/tcl-check.ps1` 对一个 `.tcl` 目录（`TCLCHECK_RESULT=PASS`）+ `doctor.ps1` |
-| **适配新一代 DSH（宿主升了版本）** | 仓库文件可能一行都不用改：先在隔离 home 里 `py dev\accept_all.py --only install`（组合 4 标记 + **schema 两条门禁** + 幂等），再 `doctor.ps1` 第 12 项。若 shipped preset 行有变 → 按 `dev/README.md` §2.4 做结构 diff、重生成模板与审计件 | `py dev\accept_all.py --only install,doctor`；`doctor.ps1`；结论登记进 `docs/version-matrix.md`（或对应版本说明） |
+| **适配新一代 DSH（宿主升了版本）** | ① 先 `py tools\make_template.py --sync-shipped --check --dsh-install <DSH>` 看 shipped 22 行有没有变（有变就 `--sync-shipped` 重生成，`git diff templates/` 复核）；② 隔离 home 里 `py dev\accept_all.py --only install`（组合 4 标记 + **schema 两条门禁** + 幂等）；③ `doctor.ps1` 第 12 项（豁免要 merge 新版本）。详见 `dev/README.md` §2.4 | `py dev\accept_all.py --only install,doctor`；`doctor.ps1`；版本事实/改动登记进 `docs/architecture.md` §6 与 `dev/README.md` §2.4 |
 
 门禁按这个顺序跑（前一步不过就不用跑后面）：
 
 ```powershell
-py tools\make_template.py --check          # 模板/审计件与生成器是否逐字节一致
+py tools\make_template.py --sync-shipped --check --dsh-install <DSH>  # shipped 22 行是否仍与已装 DSH 的 app.asar 一致
+py tools\make_template.py --check          # 模板/审计件是否逐字节一致（含逐行还原比对）
 py tools\gen_skills_manifest.py --check    # skills/MANIFEST.json 是否漂移
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\vivado-probe.ps1     # 会真起一次 Vivado（~15s）
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\tcl-check.ps1 .\templates

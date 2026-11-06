@@ -1,15 +1,16 @@
 # dsh-vivado — Vivado 会话预设（bundle 层，DSH bundle patch 方言）
 #
 # 【不要手改本文件】它由 tools/render_patch.ps1 从 templates/preset.patch.yml.tmpl 渲染。
-# 模板由 tools/make_template.py 生成：22 条 shipped 插件行原样取自已实证的现役 bundle
-#   作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml（作者本机路径，不属于本分发件）
-#   （该文件已自证与 shipped dsh-web-app/presets/standard.patch.yml 逐字节一致，
-#     见 作者本机的规范化取证记录（未随仓库发布） §2.2）
+# 模板由 tools/make_template.py 生成：22 条 shipped 插件行原样取自已装 DSH 的 app.asar
+#   <DSH 安装根>\resources\app.asar
+#     :: dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml
+#   换 DSH 版本后重跑 py tools\make_template.py --sync-shipped --dsh-install <DSH 安装根>，
+#   再 review templates/ 的 git diff（上游改了哪几行一目了然）。
 # 只做两处允许的改动：persona 换成本 kit 的版本分档片段、skill-filesystem 加 customSkillDirs；
 # 末尾追加 mcp-vivado 行（硬件相关值参数化）。
 #
-# shipped-22 行 sha256（归一 LF 后，不含 persona/skill-filesystem 改动）：
-#   903077529fcf61d727dc363c2f7832077f1b3a95df3d34998a035943553252a3
+# shipped-22 行 sha256（归一 LF 后；persona 行按 shipped 原文计入，不含 skill-filesystem 改动）：
+#   b6fe694d5de6c0c91237959cbb61b7d00dc1492391c0c7a8987e7d5e204a12fa
 # 生效需**重启宿主**（Electron 下 dsh-hmr 不生效）；新会话创建时选 `Vivado` 预设。
 - insert:
     - id: preset-vivado
@@ -35,6 +36,9 @@
             disabled: !!js process.platform !== 'win32'
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              # Set false to drop the apply_patch tool beside edit.
+              applyPatch: false
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
             config:
@@ -102,14 +106,13 @@
             config:
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
-              - id: tool-subagent-list-agents
-                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-                  modelSelectionSettings: true
+                  modelSelection: true
+                  modelDiscovery: true
               - id: tool-subagent-fork
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
@@ -136,7 +139,7 @@
             name: '@deepseek-ai/dsh-tool-present'
           - id: tool-plugin-manager
             name: '@deepseek-ai/dsh-plugin-manager/tools'
-            disabled: true
+            disabled: !!js "!ctx.get('profileContext')"
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true

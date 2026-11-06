@@ -262,10 +262,10 @@ WARN = "环境本身没坏，但这件事还没做"；FAIL 只留给**做了一�
 | 项 | 内容 |
 |---|---|
 | 测什么 | profile 实际解析到的 `@deepseek-ai/dsh-mcp-client` 版本 ≠ DSH 运行时版本时，`<profile>\compatibility.json` 必须有键 `@deepseek-ai/dsh-mcp-client@<mcp 版本>`，且其值数组包含运行时版本 |
-| 运行时版本来源 | **`<dsh.cmd> --version` → `0.2.1-rc.5`**（约 0.35 s，保留预发布后缀）；退而求其次 exe `VersionInfo.ProductVersion` = `0.2.1.0`（**丢了 `-rc.5`，不能当豁免值**） |
-| mcp-client 版本来源 | `<profile>\node_modules\@deepseek-ai\dsh-mcp-client\package.json` 的 `version`（本机 `0.1.7-rc.2`） |
+| 运行时版本来源 | **`<dsh.cmd> --version` → `0.2.2-rc.1`**（约 0.35 s，保留预发布后缀）；退而求其次 exe `VersionInfo.ProductVersion` = `0.2.2.0`（**丢了 `-rc.1`，不能当豁免值**） |
+| mcp-client 版本来源 | `<profile>\node_modules\@deepseek-ai\dsh-mcp-client\package.json` 的 `version`（本机 `0.1.7-rc.2`，0.2.2-rc.1 上仍是这个版本） |
 | 命令 | `dsh.cmd --version`（超时 30 s）+ 读两个 JSON |
-| PASS | 两版本相等（不需要豁免），或键存在且值含运行时版本；detail 写 `exemption "@deepseek-ai/dsh-mcp-client@0.1.7-rc.2" -> [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.5] (runtime 0.2.1-rc.5 read from dsh.cmd --version)` |
+| PASS | 两版本相等（不需要豁免），或键存在且值含运行时版本；detail 写 `exemption "@deepseek-ai/dsh-mcp-client@0.1.7-rc.2" -> [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.5, 0.2.2-rc.1] (runtime 0.2.2-rc.1 read from dsh.cmd --version)` |
 | WARN | 判不了的那几种：profile 没有 mcp-client / 只能从 exe `ProductVersion` 拿到版本（那种值会写坏）/ 读不到运行时版本 |
 | FAIL | **判得了且判出"会被丢"**：`compatibility.json` 缺失或不可读、没有该键、值里没有运行时版本（2026-11-04 起；此前是 WARN） |
 | 修法 | `re-run install.ps1 -Profile <p> (it merges the exemption) or add "@deepseek-ai/dsh-mcp-client@<v>": ["<runtime>"] to <profile>\compatibility.json` |
@@ -273,10 +273,11 @@ WARN = "环境本身没坏，但这件事还没做"；FAIL 只留给**做了一�
 **后果（为什么升级成 FAIL）**：DSH 加载 profile 时，插件版本与宿主不一致又没有豁免 → **静默丢掉那一行**
 （`mcp-vivado` 整行消失，工具面从 91 掉回 59），日志里不一定有明显报错。2026-11-04 实测：宿主从
 `0.2.1-rc.3` 升到 `rc.5`，本机 `compatibility.json` 仍只列 `[0.2.1-rc.2, 0.2.1-rc.3]` ⇒ 预设还在、
-32 个工具随时会没；这不是"能力降级"，而是**该预设的全部价值消失**，所以 doctor 必须 FAIL 并给出
-一条命令能修好的写法（`install.ps1` 会 merge 当前运行时版本，不会覆盖其它键）。
-**实测坑**：`D:\dsh\DeepSeek Harness.exe` 的 `ProductVersion = 0.2.1.0`、`FileVersion = 0.2.1-rc.5`；
-活 profile 里的值现为 `["0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.5"]`。写豁免**必须**用 `dsh.cmd --version` 的结果。
+32 个工具随时会没；2026-11-06 又在 `rc.5 → 0.2.2-rc.1` 上复现同一条（表里只有 rc.2/rc.3/rc.5）。
+这不是"能力降级"，而是**该预设的全部价值消失**，所以 doctor 必须 FAIL 并给出一条命令能修好的写法
+（`install.ps1` 会 merge 当前运行时版本，不会覆盖其它键）。
+**实测坑**：`D:\dsh\DeepSeek Harness.exe` 的 `ProductVersion = 0.2.2.0`、`FileVersion = 0.2.2-rc.1`；
+活 profile 里的值现为 `["0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.5", "0.2.2-rc.1"]`。写豁免**必须**用 `dsh.cmd --version` 的结果。
 
 ---
 

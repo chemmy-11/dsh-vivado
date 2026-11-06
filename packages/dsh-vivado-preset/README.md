@@ -25,7 +25,7 @@ no Vivado installation are required to install the preset itself**.
 
 ```sh
 # preferred: the prebuilt tarball attached to the release (no local HTTPS git needed)
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.1/dsh-vivado-preset-0.2.1.tgz
 
 # alternative: the GitHub subdirectory URL (pnpm resolves it over HTTPS git; a host that can
 # only reach github.com over SSH fails here -- use the tarball above)
@@ -34,7 +34,7 @@ dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vi
 
 Then **restart the host** (Electron has no hot reload) and start a new session with the `Vivado` preset.
 
-- Requires dsh **≥ 0.2.1-rc.2** (built and tested against **0.2.1-rc.5**).
+- Requires dsh **≥ 0.2.2-rc.1** (built and tested against **0.2.2-rc.1**).
 - The persona's commands are written for **Windows** (PowerShell 5.1-safe); the bundle itself is
   platform-neutral, but the discipline assumptions are Windows/Vivado.
 - No configuration step: the skills mount resolves to the installed package directory through a
@@ -50,5 +50,8 @@ measured local behaviour disagree, measured local behaviour wins — and the per
 ## License
 
 MIT for this package's own content (persona, generator wiring, `vivado-workflow-discipline`).
+The 21 shipped DeepSeek Harness preset plugin rows in `cordis.patch.yml` are **MIT (© 2026 DeepSeek)**,
+extracted verbatim from the DSH desktop app's `app.asar`; the full kit's `NOTICE` §3.1 + appendix C record
+the evidence and the licence text.
 The bundled AMD ROSS skills are MIT and carry their own attribution/licence notes in
 [`skills/NOTICE-skills.md`](skills/NOTICE-skills.md); see also [`NOTICE-preset.md`](NOTICE-preset.md).

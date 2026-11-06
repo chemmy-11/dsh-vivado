@@ -41,7 +41,7 @@
 | 项 | 要求 |
 |---|---|
 | 操作系统 | Windows 10 / 11 |
-| DeepSeek Harness | **桌面版 ≥ 0.2.1-rc.2**（Electron 宿主） |
+| DeepSeek Harness | **桌面版 ≥ 0.2.2-rc.1**（Electron 宿主） |
 | Vivado | 已安装、`vivado.bat` 可跑。**2023.1 已实测**；2025.2+ 未实测（见[版本档位](#版本档位)） |
 | Python | **≥ 3.10**（`vivado-mcp` 0.3.26 要求；用你跑 `vivado-mcp` 的那个解释器即可） |
 | vivado-mcp | 已 `pip install vivado-mcp==0.3.26` 到**纯 ASCII 目录**，且能 `import vivado_mcp` |
@@ -85,7 +85,7 @@ bundle 补丁、把这一层注册进你的 profile（改之前备份 `*.bak-<�
 
 ```sh
 # 推荐：Release 预构建 tarball（不依赖本机 HTTPS git）
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.0/dsh-vivado-preset-0.2.0.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.1/dsh-vivado-preset-0.2.1.tgz
 # 备选：GitHub 子目录 URL（pnpm 会走 HTTPS git；本机 HTTPS 只通 SSH 时会失败，用上面的 tarball）
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
 ```

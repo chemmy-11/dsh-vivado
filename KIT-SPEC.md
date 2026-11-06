@@ -92,10 +92,10 @@ temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
 2. `skill-filesystem` 行加 `config: { customSkillDirs: ['<staging>/skills'] }`；
 3. 末尾追加 `mcp-vivado` 行（`@deepseek-ai/dsh-mcp-client`，stdio，32 工具）。
 
-**shipped 22 行的唯一权威来源**：从 bundle 现役文件
-`作者本机笔记库\.dsh\bundles\vivado-preset\cordis.patch.yml` 原样取（它已自证与
-shipped 逐字节一致，见结论 §2.2）；Lead 会把它落到 `templates/shipped-standard-22rows.yml`，
-队友**不要手抄**。
+**shipped 22 行的唯一权威来源**：已装 DSH 的 `<DSH>\resources\app.asar`
+:: `dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml`；用
+`py tools\make_template.py --sync-shipped --dsh-install <DSH 安装根>` 原样抽取（asar 头用 stdlib 解析，不需要 Node），
+模板与审计件都由这一条命令生成。**不要手抄**；换 DSH 版本后先跑 `--sync-shipped --check` 看 22 行有没有变。
 
 ## 6. 硬约束（红线，违反即返工）
 
