@@ -25,7 +25,7 @@ no Vivado installation are required to install the preset itself**.
 
 ```sh
 # preferred: the prebuilt tarball attached to the release (no local HTTPS git needed)
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.1/dsh-vivado-preset-0.2.1.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.2/dsh-vivado-preset-0.2.2.tgz
 
 # alternative: the GitHub subdirectory URL (pnpm resolves it over HTTPS git; a host that can
 # only reach github.com over SSH fails here -- use the tarball above)

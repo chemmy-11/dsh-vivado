@@ -2,7 +2,7 @@
 
 > 读者：已经装好 `Vivado` 预设、准备真正干活的人（也供助手在选工具前对照）。
 > 工具名一律带前缀：MCP server 名是 `vivado`，所以会话里是 `mcp__vivado__<名字>`。名字与参数取自 `vivado-mcp` 0.3.26 的 `@mcp.tool` 签名（2026-10-25 用 AST 扫源码得到，共 **32** 个，与 `doctor.ps1` 第 7 项的判据一致）。
-> **2026-10-28 更新（P1 补丁，工具总数不变，仍 32）**：本包 `patches/vivado-mcp/` 给 4 个工具加参数 —— `run_tcl`（`script_path` / `background` / `log_file` / `stdout_tail_bytes` / `job_id`）、`check_bitstream_readiness`（`dcp_path` / `run_name`，且 run 不存在时返回 `N/A（不适用）`）、`get_timing_report`（`include_paths` / `max_paths`）、`xdc_lint`（已知良性族分组 / `benign_allowlist` / `show_benign`）。下表用 **P1** 标出这些参数；**没打补丁的原版没有它们**（传了会报未知参数）——调用报"未知参数"时先确认补丁是否已应用，不要改调用方去猜。
+> **2026-10-28 更新（P1 补丁，工具总数不变，仍 32）**：本包 `patches/vivado-mcp/` 给 4 个工具加参数 —— `run_tcl`（`script_path` / `background` / `log_file` / `stdout_tail_bytes` / `job_id`）、`check_bitstream_readiness`（`dcp_path` / `run_name`，且 run 不存在时返回 `N/A（不适用）`）、`get_timing_report`（`include_paths` / `max_paths`）、`xdc_lint`（已知良性族分组 / `benign_allowlist` / `show_benign`）。下表用 **P1** 标出这些参数；**没打补丁的原版没有它们**（传了会报未知参数）——调用报"未知参数"时先确认补丁是否已应用，不要改调用方去猜。**0010（2026-11-09）只改 3 个工具的描述顺序（把 `run_tcl` 的 batch/detached 路由前置），不改参数与行为。**
 > **分类依据**：签名里有没有文件参数（`file_path` / `report_file` / `xdc_paths` / `wcfg` / `files` / `script_path`）与有没有 `session_id`。带文件参数的可以不连会话；只带 `session_id` 的必须先 `start_session`。这是**按签名与 docstring 判定**，除下表标 `实测` 的三项外没有逐个实调。**分类按工具的"主形态"计数，不按形态重复计数**：`run_tcl` 既有会话形态（§4）又有脚本文件形态（§3），只在 §3 额外列一行说明，总数仍是 32。
 
 ---

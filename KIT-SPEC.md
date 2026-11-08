@@ -41,7 +41,7 @@ D:\dsh-vivado\
 | `skills/**` | **ps-skills** | AMD 6 件 + 自研纪律 skill + `skills/NOTICE-skills.md` |
 | `NOTICE` / `LICENSE` / `README.md` | **ps-docs** | 来源/许可/改动清单/快速开始 |
 | `docs/version-matrix.md` | **ps-docs** | 版本真值分档表（T4） |
-| `patches/vivado-mcp/**` | **ps-docs** | 3 个 MCP 补丁的 `.patch` 归档 + README |
+| `patches/vivado-mcp/**` | **ps-docs** | 10 个 MCP 补丁的 `.patch` 归档 + README |
 
 共享只读：`<project_root>\.tmp\kit-recon-2026-10-24\`（asar 取证的官方文档副本，`refs/`、`pkg-skillfs/`）
 
@@ -90,7 +90,8 @@ temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
 
 1. `persona` 行的 `config.prefix` = 版本分档 persona 片段（`{{PERSONA_BLOCK}}` 渲染）；
 2. `skill-filesystem` 行加 `config: { customSkillDirs: ['<staging>/skills'] }`；
-3. 末尾追加 `mcp-vivado` 行（`@deepseek-ai/dsh-mcp-client`，stdio，32 工具）。
+3. 末尾追加 `mcp-vivado` 行（`@deepseek-ai/dsh-mcp-client`，stdio，32 工具）；
+4. persona 段必须以「Tool layer (read this first …)」开头给出**工具路由**：`mcp__vivado__*` 与 kit 技能是默认层，shell / 启动器只是兜底，并给出「第一步必须至少一次只读 MCP 调用 + 加载 `vivado-workflow-discipline`」的第一动作规则（`dev/validate_patch.py` 的 `PERSONA_PHRASES` 把关键短语锁死）。
 
 **shipped 22 行的唯一权威来源**：已装 DSH 的 `<DSH>\resources\app.asar`
 :: `dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml`；用

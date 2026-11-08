@@ -1,6 +1,6 @@
 {
   "name": "dsh-vivado-preset",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Vivado session preset for DeepSeek Harness: a version-aware FPGA engineering-discipline persona plus eight bundled AMD/FPGA skills. Installable with dsh plugin add; no Vivado installation required to install the preset.",
   "license": "MIT",
   "type": "module",

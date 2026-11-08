@@ -69,9 +69,9 @@
 | 工具面 | **32** 个 `mcp__vivado__*` 工具 | 实测 `py <vivado-mcp>\mcp_ctl.py list` → 32 行 |
 | 安装位置要求 | 必须纯 ASCII（如 `<vivado-mcp>`），否则 `start_session` 必失败 | `PITFALLS.md:31`（坑 #21） |
 
-### 2.1 我们携带的改动：4 个 `.patch` 文件（不随包分发改过的源码）
+### 2.1 我们携带的改动：10 个 `.patch` 文件（不随包分发改过的源码）
 
-`patches/vivado-mcp/` 下 4 个 unified diff，基线是 **pip 安装的 0.3.26 原样文件**（用 `dist-info/RECORD` 的 sha256 逐文件证明）：
+`patches/vivado-mcp/` 下 **10 个** unified diff（三批：0001–0004 / 0005–0009 / 0010）。基线分两种：**0001–0004 对 pip 安装的 0.3.26 原样文件**（用 `dist-info/RECORD` 的 sha256 逐文件证明）；**0005–0010 的基线是前序补丁应用后的现文件**。逐条的基线 / 大小 / 增删行见 `patches/vivado-mcp/README.md` §2；下表是**第一批 4 条**的摘要：
 
 | 补丁 | 文件 | 改了什么 | 依据 |
 |---|---|---|---|
@@ -80,8 +80,10 @@
 | `0003-xdc-lint-tool-default-full.patch` | `diagnostic_tools.py` | `xdc_lint` 工具层同样加 `severity` / `max_items`，**默认全量** | `PITFALLS.md:86`（#76） |
 | `0004-get-cdc-report-default-full.patch` | `cdc_tools.py` | `get_cdc_report` 的 `max_details` **默认 100 → 0（默认全量，工具自身上限仍 500）** | `PITFALLS.md:86`（#76） |
 
+> 后续两批：**0005–0009**（2026-10-28，`run_tcl` 脱离式 batch / 良性族 / 就绪性 N/A / 时序摘要 / 自修复跳过良性）与 **0010**（2026-11-09，只改 `run_tcl` / `run_synthesis` / `run_implementation` 的工具**描述**顺序，不改行为）。目的与依据见 `patches/vivado-mcp/README.md` §2.1、§2.2、§3.4a、§3.4b。
+
 - **不重分发修改后的源码**：kit 里只有补丁，没有 `vivado-mcp` 的任何 `.py`；同门用 `pip install vivado-mcp==0.3.26` 自装后**显式**应用补丁。
-- **不做私有 fork**：优先把 4 条改动**上游 PR**（每一条都能独立成 PR）。按 Apache-2.0 §4(b)，被修改的文件需带「已被修改」的显著提示——把改动留在使用者显式应用的补丁里，比静默发一份改过的源码更符合该义务，也让上游可审；若上游接受或自行修掉，本 kit 删除对应补丁并在此登记「已上游化」。
+- **不做私有 fork**：优先把 10 条改动**上游 PR**（每一条都能独立成 PR）。按 Apache-2.0 §4(b)，被修改的文件需带「已被修改」的显著提示——把改动留在使用者显式应用的补丁里，比静默发一份改过的源码更符合该义务，也让上游可审；若上游接受或自行修掉，本 kit 删除对应补丁并在此登记「已上游化」。
 - **Apache-2.0 §4(a) 已履行**：随包提供许可证全文 `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`
   （10 774 B，取自 `vivado_mcp-0.3.26.dist-info/licenses/LICENSE`，sha256 `77b29df2…459e9c`）。
 - **§4(d) 无需履行**：2026-10-24 用 GitHub Contents API 核对上游仓库根目录，**没有** `NOTICE` / `NOTICE.md` 文件

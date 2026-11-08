@@ -121,7 +121,7 @@ powershell -ExecutionPolicy Bypass -File D:\dsh-vivado\install.ps1   # 幂等：
 
 ```sh
 # 推荐：Release 预构建 tarball（不依赖本机 HTTPS git）
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.1/dsh-vivado-preset-0.2.1.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.2/dsh-vivado-preset-0.2.2.tgz
 # 备选：GitHub 子目录 URL（pnpm 走 HTTPS git；本机 HTTPS 只通 SSH 时会失败）
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
 ```

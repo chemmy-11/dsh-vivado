@@ -1,9 +1,9 @@
 ---
 name: vivado-workflow-discipline
-description: "Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail、safe_tcl 占位符必须独占一个词、检查类工具默认无损不得静默截断、版本分档（2023.1 有本仓记录 / 2025.2+ 必须重探）、长构建必须脱离进程树并用标记行判进度、板卡不在场时的离线/dry-run 口径、报告文件与即时查询必须交叉核对等判据。当任务要打开或运行 Vivado 工程、综合、实现、时序/CDC 分析、XDC 约束检查、ILA 调试，或需要判断「工具说成功是不是真的成功」时使用。"
+description: "**任务涉及 prj/project_*/.xpr/RTL/TB/仿真/综合/实现/时序/XDC/ILA 时，第一步就加载本技能**：先走 mcp__vivado__* 与 kit 技能（parse_xpr / xdc_lint / run_tcl(script_path,background) 等），shell 与启动器只是兜底。Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail、safe_tcl 占位符必须独占一个词、检查类工具默认无损不得静默截断、版本分档（2023.1 有本仓记录 / 2025.2+ 必须重探）、长构建必须脱离进程树并用标记行判进度、板卡不在场时的离线/dry-run 口径、报告文件与即时查询必须交叉核对等判据。当任务要打开或运行 Vivado 工程、综合、实现、时序/CDC 分析、XDC 约束检查、ILA 调试，或需要判断「工具说成功是不是真的成功」时使用。"
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
 baseline:
   amd_doc: "unspecified"
   tested_on: null
@@ -18,7 +18,32 @@ baseline:
 > 标记约定：`本仓记录` = 本仓 PITFALLS / 结论里有本机实测与证据，**但本技能没有复测**（转述）；`按文档/未实测` = 只有厂商文档或第三方说法。
 > **本文件没有任何一条结论是本技能亲自跑 Vivado 得到的** —— 转述可以引用，不得升格成「已验证」。
 
-## 0. 进 Vivado 之前（30 秒自检，缺一项别开工）
+## 0. 工具路由（第一步：MCP 优先，shell / 启动器兜底）
+
+> 2026-11-08 prj13 离线任务的实测教训：Lead 一项 98 次工具调用里 **0 次 `mcp__vivado__*`、只加载了 1 个与 Vivado 无关的技能**，全程用 `vivado-run.ps1` 启动器 + `pwsh` 探索工程；直到用户问「为什么你不用 dsh-vivado 相关工具和技能？」才在下一轮改用 MCP 工具与技能。根因是预设里启动器指令比 MCP 指令更具体、更靠前，**不是工具不可用**。所以加载本技能后第一件事是定工具层：
+
+- **默认层 = `mcp__vivado__*` + 本 kit 的 8 个技能**；**兜底层 = `pwsh` + `tools/vivado-run.ps1` / `vivado.bat`**。
+- 任何涉及工程 / RTL / TB / XDC / 仿真 / 综合 / 实现 / 时序 / 位流的任务，**第一轮工具批次必须同时满足**：
+  1. 已加载本技能；
+  2. 至少一次**只读 MCP 调用**（`parse_xpr` / `xdc_lint` / `get_timing_report(report_file=…)` / `get_critical_warnings`）。
+- 任务 → 第一个该用的工具：
+
+| 任务 | 首选 | 说明 |
+|---|---|---|
+| 工程摸底（part / top / fileset / 约束 / IP） | `parse_xpr` | 纯 Python 读 `.xpr`，**不占 Vivado 进程** |
+| XDC 静态检查 | `xdc_lint` | 纯 Python，**不占 Vivado 进程**；引结论要带良性计数与「阻断判定」 |
+| 综合 / 实现（工程 run） | `run_synthesis` / `run_implementation`（`wait:false` + `get_run_progress`） | 不要同步长等待、不要拿 shell 跑同样的 run |
+| 任意 batch Tcl / checkpoint 式构建（place / route / write_bitstream） | `run_tcl(script_path=…, background=True)` + `job_id` 轮询 | 脱离进程树、不需要 `start_session`；**长构建首选**，启动器只是兜底 |
+| 既有报告 / 日志 / 时序 / CDC / 位流 / ltx | `get_timing_report(report_file=…)` / `get_critical_warnings` / `get_cdc_report` / `parse_bit_header` / `parse_ltx` | 全部离线 |
+| 交互式一次性查询 | `start_session` + `run_tcl(command=…)` | 少数场景，不是默认 |
+| ILA / VIO / 上板 | `hw-ila-debug` / `hw-vio-debug` 技能 + 对应工具 | 板不在场时按 §8 走离线口径 |
+| 官方 Tcl / UG 语义 | `amd-doc-search` 技能 | query 会外发，NDA 项目不用 |
+
+- **Shell 闸门**：起 `vivado-run.ps1` / `vivado.bat` 前，先用一行说明「这一步没有对应的 `mcp__vivado__*` 工具」；有对应工具就必须先用工具。「启动器也是 kit 的工具」不构成理由 —— MCP 工具是主接口，启动器是兜底。
+- **技能闸门**：改/写 RTL 或 TB 前加载 `vivado-rtl-lint`（有综合 / elaboration 日志时加 `vivado-rtl-elaboration-analysis`）；跑仿真前加载 `vivado-simulate-rtl`；工程导出 / 版本管理前加载 `vivado-revision-control`；引用官方 Tcl / UG 结论前加载 `amd-doc-search`。
+- 发现自己正用 `pwsh` 做某件技能 / MCP 工具已覆盖的事 → 停下来换工具，不要"先跑通再说"。
+
+## 0.1 进 Vivado 之前（30 秒自检，缺一项别开工）
 
 - [ ] **串行**：`tasklist | grep -i vivado` 必须为空。Vivado 是**全局串行**的（GUI、综合、实现、仿真、ILA 抓取共用一台机器一个 license）；第二个进程只会给你 stale lock、假进度和「文件被占用」。
 - [ ] **纯 ASCII**：当前 cwd、`TEMP`、`TMP`、工程根、MCP 安装路径全为纯 ASCII。中文路径经 Vivado Tcl 的 GBK 解码会坏，表现为「文件找不到 / IP 生成失败」这类误导性错误。
@@ -65,10 +90,11 @@ baseline:
 
 ## 4. 工具面：直连 MCP 优先，CLI 桥兜底
 
+- **§0 的闸门在这里落地**：有 `mcp__vivado__*` 就先用它；`pwsh` + 启动器只在 MCP 不可用、或工具明确 N/A 时用。
 - 会话里有 `mcp__vivado__*`（kit 预设提供）就直连：多步会话成立、`wait:false` 可用。
 - 没有该前缀（未重启宿主 / 用标准预设）→ 走 CLI 桥，并记住「一进程一调用」。
 - **命令 shell 用会话里真实存在的那个**：Windows 上通常是官方 `pwsh`（本机实测它可能后端就是 Windows PowerShell 5.1，别假设 PowerShell 7 语法），POSIX 上是 `bash`。第三方常驻 shell（`win_bash` 之类）是**可选件**：本 kit 不依赖它，别人环境里没有它是常态；它中途消失也不要重试，换官方 shell 或直接走 MCP。会话里一个 shell 都没有时不要编命令——走 `mcp__vivado__*`，或把要跑的命令写成脚本文件交给用户执行。
-- **起 Vivado 不要现写命令**：用本包 `tools/vivado-probe.ps1`（探活）与 `tools/vivado-run.ps1 -Source <tcl> [-Detach]`（batch 运行）。两者按本机实测可用的 `Start-Process -FilePath <bat> -ArgumentList @(...)` 形态实现，绕开 `cmd /c "<带引号整串>"` 的二次套引号陷阱。MCP 侧的等价形态是 `run_tcl(script_path=..., background=..., log_file=...)`（**不需要 `start_session`**，但会起一个 Vivado batch 进程），查状态用 `job_id`，别把它当"已完成"。每个工具有没有离线形态，以 `docs/tools.md` 为准；**某个会话到底挂没挂 `mcp__vivado__*`，只能看该会话自己的工具清单**，不要按文档断言"已挂 N 个"。
+- **兜底（仅 MCP 不可用 / N/A）**：起 Vivado 不要现写命令，用本包 `tools/vivado-probe.ps1`（探活）与 `tools/vivado-run.ps1 -Source <tcl> [-Detach]`（batch 运行）。两者按本机实测可用的 `Start-Process -FilePath <bat> -ArgumentList @(...)` 形态实现，绕开 `cmd /c "<带引号整串>"` 的二次套引号陷阱。**长构建 / 批处理的首选形态是** `run_tcl(script_path=..., background=..., log_file=...)`（**不需要 `start_session`**，但会起一个 Vivado batch 进程），查状态用 `job_id`，别把它当"已完成"。每个工具有没有离线形态，以 `docs/tools.md` 为准；**某个会话到底挂没挂 `mcp__vivado__*`，只能看该会话自己的工具清单**，不要按文档断言"已挂 N 个"。
 - 仿真在 Win11 24H2+ 可能因 `NoDefaultCurrentDirectoryInExePath` 导致 `compile.bat` 找不到而全挂（`本仓记录`，PITFALLS #73；本技能未复测）：修法为 `reg add HKCU\Environment /v NoDefaultCurrentDirectoryInExePath /d 0 /f`（下次登录生效），或会话内 `set NoDefaultCurrentDirectoryInExePath=0`。
 
 ## 5. 文档检索的两条通路（先知道自己把 query 发给了谁）
@@ -100,7 +126,7 @@ baseline:
 - **Task Scheduler 不能当长构建的出口**：默认 schtasks 任务带 `IdleSettings{Duration=PT10M, StopOnIdleEnd=true}` 且无 `ExecutionTimeLimit` 覆盖；实测 34 分钟实现段用它跑到 **9m20s 被静默中止**（无 rc 文件、日志停在 `place_design Phase 3.2`、没有 `Exiting Vivado`）。只能作最后兜底，且用了要盯 `-log` 是否突然停更。
 - 代价：脱离进程**没有工具返回值**，必须让构建自己写状态行，外部只读状态行。
 
-做法（本包已给现成件）：
+**首选出口（MCP）**：`run_tcl(script_path=<.tcl>, background=True, log_file=<log>)` 起**脱离进程树**的独立 Vivado batch 进程，立即拿 `job_id`，之后用 `run_tcl(job_id=...)` 查状态与日志尾；不需要 `start_session`，MCP server 退出 / 回合结束 / `^C` 都带不走它。下面 1–6 是 **MCP 不可用时**的启动器兜底实测：
 
 1. `tools/vivado-run.ps1 -Source <tcl> -Detach`：生成 `<base>.run.cmd` + `build_status.txt`，立即返回 `RUN_LAUNCHER=wmi-com|wmi-cim|schtasks` / `RUN_PID` / `RUN_STATUS`；三级链已按上面的实测排序。
 2. 构建 Tcl 里 `source <kit>/templates/build-markers.tcl`，在关键节点 `kit_mark SYNTH_OK ...`、`kit_mark IMPL_OK ...`；失败路径 `kit_fail ...` 会落 `BUILD_FAILED`。

@@ -102,7 +102,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1 | Select-String
 ### 2.7 `xdc_lint` / `get_cdc_report` 明细被截断
 
 - 原因：上游默认裁剪——`xdc_lint` 默认 `max_items=20`、`get_cdc_report` 默认 `max_details=100`，大工程会静默少给你要修的那几条（`NOTICE` §2.1）。
-- 修法二选一：显式传 `max_items=0` / `max_details=0`（0 = 全量）；或按 `patches/vivado-mcp/README.md` §4 打上 4 个补丁，之后默认就是全量。
+- 修法二选一：显式传 `max_items=0` / `max_details=0`（0 = 全量）；或按 `patches/vivado-mcp/README.md` §4 打上全部 10 个补丁（至少 0001–0004 才拿到默认全量）。
 ```powershell
 # 在 <vivado-mcp>\site 目录下执行；必须带 core.autocrlf=false
 git -c core.autocrlf=false apply -p1 "<kit>\patches\vivado-mcp\0001-tcl-max-lines-and-safe-tcl-hint.patch"
@@ -196,7 +196,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1 -Quick   # 跳�
 | 8 | `license` | 静态 license 线索（环境变量 / `*.lic`） | 命中线索=PASS；无线索或路径失效=WARN；**永不 FAIL** | 设 `XILINXD_LICENSE_FILE`；失败也照跑（可能来自服务器/评估模式） |
 | 9 | `bundle-installed` | 依赖行 + `link:` 目录存在 + `dsh.profile.bundles` | 三者齐=PASS；裸 profile（零痕迹）=WARN；半装/坏装=FAIL | 跑 `install.ps1 -Profile <profile>` |
 | 10 | `bundle-rendered` | `<staging>\cordis.patch.yml` 无残留占位符、`customSkillDirs` 目录存在 | 全过=PASS；staging 不存在=WARN；缺失/残留/目录不存在=FAIL | 重跑 `install.ps1`（会重新渲染） |
-| 11 | `mcp-patches` | 5 组源码内容标记（4 个补丁是否在位） | 5/5=PASS；有缺失或 site 不可用=WARN；**永不 FAIL** | 按 `patches/vivado-mcp/README.md` §4 打补丁 |
+| 11 | `mcp-patches` | 11 组源码内容标记（10 个补丁是否在位） | 11/11=PASS；有缺失或 site 不可用=WARN；**永不 FAIL** | 按 `patches/vivado-mcp/README.md` §4 打补丁 |
 | 12 | `compatibility` | `compatibility.json` 的 mcp-client 版本豁免 | 两版本相等，或键存在且含运行时版本=PASS；缺键/值不含/版本来源不可靠=WARN；**永不 FAIL** | 重跑 `install.ps1`（别加 `-SkipCompatibility`）后重启 |
 | 13 | `skills` | 8 个技能目录在场，且 `SKILL.md` 的 `name:` 等于目录名 | 8/8=PASS；staging 不存在=WARN；缺目录/`name` 不符=FAIL | 重装 bundle，或把 `name:` 改成目录名 |
 

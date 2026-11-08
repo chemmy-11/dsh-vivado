@@ -75,7 +75,10 @@ SHIPPED_ROWS = [
 # preset must drive the shell the session actually lists (never a third-party add-on), must name
 # the launcher/TCL_OK success criterion, and must describe detached long builds.
 PERSONA_PHRASES = ("GLOBALLY SERIAL", "ASCII", "file:line", "is_error: false", "safe_tcl",
-                   "pwsh", "TCL_OK", "Start-Process", "Detach")
+                   "pwsh", "TCL_OK", "Start-Process", "Detach",
+                   # 2026-11-09: the tool-routing block is part of the contract — losing it is a behavioural
+                   # regression (the 2026-11-08 prj13 session used only shell launchers and never MCP tools).
+                   "Tool layer", "First move", "parse_xpr", "run_tcl(script_path")
 
 # Text that must NOT come back: these were the win_bash-coupled instructions removed on
 # 2026-10-25 (they told the agent to depend on a plugin that is absent in other people's

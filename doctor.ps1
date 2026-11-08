@@ -1120,6 +1120,11 @@ function Test-CheckMcpPatches {
             Label = 'xdc_auto_fix skips benign (patch 0009)'
             File  = (Join-Path $site 'vivado_mcp\analysis\xdc_auto_fixer.py')
             Any   = @('_is_benign')
+        },
+        @{
+            Label = 'tool routing descriptions (patch 0010)'
+            File  = (Join-Path $site 'vivado_mcp\tools\tcl_tools.py')
+            Any   = @('Routing summary: offline/long builds')
         }
     )
     $present = New-Object System.Collections.Generic.List[string]

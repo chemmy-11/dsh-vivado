@@ -1,0 +1,46 @@
+--- a/vivado_mcp/tools/tcl_tools.py
++++ b/vivado_mcp/tools/tcl_tools.py
+@@ -1290,6 +1290,17 @@
+     ctx: Context = None,
+ ) -> str:
+     r"""执行任意 Vivado Tcl 命令。支持所有 Vivado Tcl API。
++
++    **工具路由（先读）**：这不是只能在交互会话里用的小工具。长任务 / 离线批量构建
++    （综合、实现、bitstream、报告导出、checkpoint 流程、任意 batch Tcl）请用
++    ``script_path`` + ``background=True``：它把 .tcl 交给**脱离进程树**的独立
++    ``vivado -mode batch -source`` 进程，立即返回 ``job_id``（用 ``job_id=`` 轮询
++    状态 + 日志尾），**不需要也不占用任何会话**，MCP server 退出 / 回合结束 / ^C
++    都带不走它。会话内 ``command=`` 只适合秒级单条查询；报告类优先用专用工具
++    （get_timing_report / get_critical_warnings / parse_xpr 等），工程 run 的综合 /
++    实现另见 ``run_synthesis`` / ``run_implementation``。
++
++    Routing summary: offline/long builds (synthesis, implementation, bitstream, report export, checkpoint flows, any batch Tcl) -> script_path + background=True; project-run builds -> run_synthesis / run_implementation; shell launchers are the fallback.
+ 
+     这是最通用的工具，可以执行任何 Vivado Tcl 命令，包括：
+ 
+--- a/vivado_mcp/tools/flow_tools.py
++++ b/vivado_mcp/tools/flow_tools.py
+@@ -319,6 +319,11 @@
+ ) -> str:
+     """启动综合；默认等待完成，也可异步提交后查询状态。
+ 
++    **路由提示**：本工具驱动**工程 run**（``synth_1``），需要 ``start_session`` 的会话
++    （``mode="tcl"`` 可无头）。checkpoint 式、或需要先插 ILA / 写 ``write_checkpoint``
++    的构建流程不在本工具覆盖范围 —— 用 ``run_tcl(script_path=…, background=True)``
++    起脱离进程树的 batch，不要改用 shell 启动器。
++
+     不调用 Tcl wait_on_run(会阻塞 Vivado event loop,GUI 模式冻住界面);
+     wait=True 时 Python 每 2 秒查一次状态并上报进度；wait=False 时立即
+     返回 job_id，随后用 get_run_progress 查询。
+@@ -354,6 +359,11 @@
+     wait: bool = True,
+ ) -> str:
+     """启动实现（布局布线）；默认等待完成，也可异步提交。
++
++    **路由提示**：本工具驱动**工程 run**（``impl_1``），需要 ``start_session`` 的会话
++    （``mode="tcl"`` 可无头）。checkpoint 式 / 自定义 ``place``/``route`` 指令流程不在
++    本工具覆盖范围 —— 用 ``run_tcl(script_path=…, background=True)``，不要改用 shell
++    启动器。
+ 
+     不调用 Tcl wait_on_run(会阻塞 Vivado event loop,GUI 模式冻住界面);
+     wait=True 时 Python 每 2 秒查一次 STATUS/PROGRESS；wait=False 时立即
