@@ -54,9 +54,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 | PASS | 文件存在；detail 给出绝对路径与字节数 |
 | WARN | 无（该项只有 PASS/FAIL） |
 | FAIL | `vivado_path` 为空、目录不存在、或目录里没有 `vivado.bat`（detail 会额外注明"目录也不存在"） |
-| 修法 | `set \`vivado_path\` to the directory that contains vivado.bat (e.g. D:/Xilinx/Vivado/2025.2/bin) and re-run install.ps1` |
+| 修法 | `set \`vivado_path\` to the directory that contains vivado.bat (e.g. C:/Xilinx/Vivado/<version>/bin) and re-run install.ps1` |
 
-`vivado_path` 的语义是**含 `vivado.bat` 的 bin 目录**，不是安装根：`D:/Xilinx/Vivado/2023.1/bin`。
+`vivado_path` 的语义是**含 `vivado.bat` 的 bin 目录**，不是安装根：`C:/Xilinx/Vivado/2023.1/bin`。
 安装根（`<install>`）= 它的上一级，检查 2/4 都用这个推导值。
 
 ---
@@ -124,7 +124,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 | 修法 | `set \`part\` to a device installed in this Vivado (families found: artix7, kintex7, ... , versal; device names are listed in data/parts/installed_devices.txt) and re-run install.ps1` |
 
 本机实测：`xcku060` 在 `kintexu` 族（`installed_devices.txt` 里 `'kintexu' => [` 段内含 `'xcku060'`），
-目录 `D:\Xilinx\Vivado\2023.1\data\parts\xilinx\kintexu\` 存在。速度等级 / 封装（`-ffva1156-2-i`）不在本检查范围。
+目录 `<Vivado>\data\parts\xilinx\kintexu\` 存在。速度等级 / 封装（`-ffva1156-2-i`）不在本检查范围。
 
 ---
 
@@ -138,12 +138,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 | WARN | ① 只有 **`cwd`** 含非 ASCII（doctor 恰好被从中文目录启动——那是 shell 位置，不是 kit 配置）；② 无非 ASCII 但 config 键为空（`project_root`/`vivado_mcp_cwd`/`temp_dir`） |
 | FAIL | `TEMP`/`TMP` 或三个 config 键（`project_root`/`vivado_mcp_cwd`/`temp_dir`）含非 ASCII；detail 点名**第一个**冒犯的键（其余并列列出） |
 | FAIL（2026-10-24 补充） | 三个 config 键指向的目录**不存在**：`path does not exist: <key>=<value>`。这三项会成为 MCP 子进程的 cwd 与 TEMP/TMP，路径不存在时子进程起不来，而 `failOnStartupError: false` 让失败静默 ⇒ 会话工具数为 0 而其它检查全绿（真事故：`config.example.yml` 的示例路径 `D:/fpga_project` 被原样拿去渲染）。修法 = 建目录或改键 → 重跑 `install.ps1`（它现在也会在渲染前拦住）→ 重启 |
-| 修法 | `point \`temp_dir\` at a pure-ASCII directory on the same drive (e.g. D:/FPGA/.tmp) and re-run install.ps1; for TEMP/TMP set $env:TEMP/$env:TMP before running Vivado` |
+| 修法 | `point \`temp_dir\` at a pure-ASCII directory on the same drive (e.g. <drive>:/kit-tmp) and re-run install.ps1; for TEMP/TMP set $env:TEMP/$env:TMP before running Vivado` |
 
 **为什么 config/TEMP/TMP 是 FAIL**：Vivado 的 Tcl 层按 GBK 解码路径，中文目录会在 `open_project` /
 `write_*` 级别炸掉，而且报错信息本身经常是乱码；`temp_dir` 还直接进 MCP 进程的 `TEMP`/`TMP`（渲染进 patch），
 `vivado_mcp_cwd` 是 MCP 进程的 cwd。这些是"装进去就带着走"的值，错了 kit 就是不能用。
-建议值始终给"同盘的 ASCII 目录"（本机 `D:/FPGA/.tmp` 已存在时优先建议它）。
+建议值始终给"同盘的 ASCII 目录"（优先 `<drive>:/kit-tmp`，不存在时退回用户目录）。
 
 **为什么 `cwd` 只 WARN**：doctor 的当前目录只是"用户恰好在这里敲命令"，不是 kit 的配置。
 实测反例：在 vault（作者本机笔记库）里跑 doctor，若按 FAIL 处理会整项变红、
@@ -195,7 +195,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File doctor.ps1 -Quick
 | PASS | 任一线索命中；detail 写清来源（`[exists]` / `[license server, not probed]` / `*.lic under ...`） |
 | WARN | 一条线索都没有（detail 注明"许可证也可能在别处：服务器、加密狗、评估模式"），或值存在但路径失效 |
 | FAIL | **永远不 FAIL** |
-| 修法 | `set $env:XILINXD_LICENSE_FILE (this session) or the user environment variable to your .lic file / 2100@server, e.g. D:/Xilinx/license.lic; doctor never installs licenses` |
+| 修法 | `set $env:XILINXD_LICENSE_FILE (this session) or the user environment variable to your .lic file / 2100@server, e.g. C:/Xilinx/license.lic; doctor never installs licenses` |
 
 **为什么只 WARN**：许可证可以来自浮动服务器、`XILINX_LICENSE` 注册表项、MAC 绑定的随机器文件、
 甚至 WebPACK/评估模式；静态判不了"能不能跑"，而**真去启动 Vivado 验 license 太慢且可能弹 GUI**。

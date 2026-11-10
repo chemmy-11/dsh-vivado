@@ -71,13 +71,13 @@ D:\dsh-vivado\
 ```yaml
 # dsh-vivado 环境配置（install.ps1 会按探测结果写实际值）
 part: xcku060-ffva1156-2-i          # 器件
-project_root: D:/FPGA               # 工程根（必须 ASCII）
+project_root: D:/fpga_project       # 工程根（必须 ASCII，示例值）
 vivado_version: 2023.1              # 决定 persona 版本分档
 vivado_path: D:/Xilinx/Vivado/2023.1/bin   # 含 vivado.bat 的 bin 目录
 python: <vivado-mcp>/venv/Scripts/python.exe   # 跑 vivado-mcp 的解释器
 vivado_mcp_site: <vivado-mcp>/site        # PYTHONPATH
-vivado_mcp_cwd: D:/FPGA                    # MCP server 的 cwd（必须 ASCII）
-temp_dir: D:/FPGA/.tmp                     # TEMP/TMP（必须 ASCII）
+vivado_mcp_cwd: D:/fpga_project             # MCP server 的 cwd（必须 ASCII，示例值）
+temp_dir: D:/fpga_project/.tmp              # TEMP/TMP（必须 ASCII，示例值）
 ```
 
 规则：值里 `\` 允许，渲染时统一写 `/`；`#` 之后是注释；空行忽略；未知键忽略。

@@ -286,7 +286,7 @@ function Test-CheckVivadoInstall {
     if ($bin -eq '') {
         return New-Result 'vivado-install' 'Vivado install' 'FAIL' `
             'config has no vivado_path' `
-            'set `vivado_path` to the directory that contains vivado.bat (e.g. D:/Xilinx/Vivado/2025.2/bin) and re-run install.ps1'
+            'set `vivado_path` to the directory that contains vivado.bat (e.g. C:/Xilinx/Vivado/<version>/bin) and re-run install.ps1'
     }
     $bat = Join-Path $bin 'vivado.bat'
     if (-not (Test-DoctorFile $bat)) {
@@ -294,7 +294,7 @@ function Test-CheckVivadoInstall {
         if (-not (Test-DoctorDir $bin)) { $extra = ' (that directory does not exist either)' }
         return New-Result 'vivado-install' 'Vivado install' 'FAIL' `
             ('vivado.bat not found at ' + (ConvertTo-SlashPath $bat) + $extra) `
-            'set `vivado_path` to the directory that contains vivado.bat (e.g. D:/Xilinx/Vivado/2025.2/bin) and re-run install.ps1'
+            'set `vivado_path` to the directory that contains vivado.bat (e.g. C:/Xilinx/Vivado/<version>/bin) and re-run install.ps1'
     }
     $size = 0
     try { $size = (Get-Item -LiteralPath $bat).Length } catch { $size = 0 }
@@ -425,12 +425,12 @@ function Test-CheckPython {
     $probe = Get-PythonProbe
     if ($probe.Path -eq '') {
         return New-Result 'python' 'Python + UTF-8' 'FAIL' 'config has no python' `
-            'point `python` at a 3.10+ interpreter (e.g. the vivado-mcp venv: D:/vivado-mcp/venv/Scripts/python.exe) and re-run install.ps1'
+            'point `python` at a 3.10+ interpreter (e.g. the vivado-mcp venv: <vivado-mcp>/venv/Scripts/python.exe) and re-run install.ps1'
     }
     if (-not $probe.Exists) {
         return New-Result 'python' 'Python + UTF-8' 'FAIL' `
             ('python not found: ' + (ConvertTo-SlashPath $probe.Path)) `
-            'point `python` at a 3.10+ interpreter (e.g. the vivado-mcp venv: D:/vivado-mcp/venv/Scripts/python.exe)'
+            'point `python` at a 3.10+ interpreter (e.g. the vivado-mcp venv: <vivado-mcp>/venv/Scripts/python.exe)'
     }
     if (-not $probe.StartOk) {
         return New-Result 'python' 'Python + UTF-8' 'FAIL' `
@@ -440,7 +440,7 @@ function Test-CheckPython {
     if (-not $probe.VersionOk) {
         return New-Result 'python' 'Python + UTF-8' 'FAIL' `
             ('python ' + $probe.Version + ' is older than 3.10') `
-            'point `python` at a 3.10+ interpreter (e.g. the vivado-mcp venv: D:/vivado-mcp/venv/Scripts/python.exe)'
+            'point `python` at a 3.10+ interpreter (e.g. the vivado-mcp venv: <vivado-mcp>/venv/Scripts/python.exe)'
     }
 
     # UTF-8 mode: PYTHONUTF8=1 must make the interpreter emit UTF-8 for a CJK literal.
@@ -713,7 +713,7 @@ function Test-CheckMcpImport {
     $site = Get-McpSite
     if ($site -eq '') {
         return New-Result 'mcp-import' 'vivado_mcp import' 'FAIL' 'config has no vivado_mcp_site' `
-            'set `vivado_mcp_site` to the directory that contains the `vivado_mcp` package (the `site` dir of the vivado-mcp install, e.g. D:/vivado-mcp/site)'
+            'set `vivado_mcp_site` to the directory that contains the `vivado_mcp` package (the `site` dir of the vivado-mcp install, e.g. <vivado-mcp>/site)'
     }
     if (-not (Test-DoctorDir $site)) {
         return New-Result 'mcp-import' 'vivado_mcp import' 'FAIL' `
@@ -890,7 +890,7 @@ function Test-CheckLicense {
     $detail = 'no XILINXD_LICENSE_FILE / LM_LICENSE_FILE and no *.lic under %USERPROFILE%\.Xilinx'
     if ($bad.Count -gt 0) { $detail = $detail + ' (stale values: ' + ($bad -join '; ') + ')' }
     return New-Result 'license' 'Vivado license' 'WARN' ($detail + ' - a license may still live elsewhere (server, dongle, evaluation mode)') `
-        'set $env:XILINXD_LICENSE_FILE (this session) or the user environment variable to your .lic file / 2100@server, e.g. D:/Xilinx/license.lic; doctor never installs licenses'
+        'set $env:XILINXD_LICENSE_FILE (this session) or the user environment variable to your .lic file / 2100@server, e.g. C:/Xilinx/license.lic; doctor never installs licenses'
 }
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@
 # Usage:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\find-project.ps1
 #   powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\find-project.ps1 -Pattern '*.xpr'
-#   powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\find-project.ps1 -ProjectRoot D:/FPGA -Json
+#   powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\find-project.ps1 -ProjectRoot <project_root> -Json
 #
 # Exit codes: 0 = at least one artifact found, 1 = none found, 2 = config/root error.
 

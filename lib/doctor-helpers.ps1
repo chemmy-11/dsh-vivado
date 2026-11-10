@@ -304,8 +304,7 @@ function Get-DoctorMcpClientVersion {
 function Get-DoctorAsciiSuggestion {
     <#
     Suggest an ASCII scratch directory on the same drive as the offending path:
-      1. <drive>:/FPGA/.tmp   (this machine's convention)
-      2. <drive>:/.kit-tmp
+      1. <drive>:/kit-tmp
     Prefers a candidate that already exists and passes Test-AsciiPath.
     #>
     param([string]$OffendingPath)
@@ -314,8 +313,12 @@ function Get-DoctorAsciiSuggestion {
         $m = [regex]::Match($OffendingPath, '^([A-Za-z]):')
         if ($m.Success) { $drive = $m.Groups[1].Value.ToUpper() + ':' }
     }
-    if ($drive -eq '') { return 'D:/FPGA/.tmp' }
-    $candidates = @(($drive + '/FPGA/.tmp'), ($drive + ':/.kit-tmp'), $env:USERPROFILE)
+    if ($drive -eq '') {
+        # No drive in the offending path: use the OS temp drive, then C: as the last resort.
+        $tmpDrive = [regex]::Match([System.IO.Path]::GetTempPath(), '^([A-Za-z]):')
+        if ($tmpDrive.Success) { $drive = $tmpDrive.Groups[1].Value.ToUpper() + ':' } else { $drive = 'C:' }
+    }
+    $candidates = @(($drive + ':/kit-tmp'), $env:USERPROFILE)
     foreach ($c in $candidates) {
         if ([string]::IsNullOrWhiteSpace($c)) { continue }
         $win = Get-DoctorWinPath $c

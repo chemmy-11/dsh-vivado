@@ -376,7 +376,7 @@ cdc_tools.py:23: report_file: str = "", max_details: int = 0,
 #     +1861 s finished / exit 0；build 18:05:16 → 18:35:24 = 30m08s > 30 min 预算
 #     log 227 243 B；IMPL_GATE WNS=0.032 WHS=0.004
 #     对照：同一脚本用 schtasks 启动时 9m20s 被静默杀掉（IdleSettings PT10M）
-#     证据：D:\FPGA\.tmp\dsh-vivado-20261028\p1-1-real\timeline.json
+#     证据：<work-dir>\dsh-vivado-20261028\p1-1-real\timeline.json
 ```
 
 ### 9.2 2026-11-09 追加 0010 的验证输出
