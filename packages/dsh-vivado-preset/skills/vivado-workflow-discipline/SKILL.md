@@ -1,9 +1,9 @@
 ---
 name: vivado-workflow-discipline
-description: "**任务涉及 prj/project_*/.xpr/RTL/TB/仿真/综合/实现/时序/XDC/ILA 时，第一步就加载本技能**：先走 mcp__vivado__* 与 kit 技能（parse_xpr / xdc_lint / run_tcl(script_path,background) 等），shell 与启动器只是兜底。Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail、safe_tcl 占位符必须独占一个词、检查类工具默认无损不得静默截断、版本分档（2023.1 有本仓记录 / 2025.2+ 必须重探）、长构建必须脱离进程树并用标记行判进度、板卡不在场时的离线/dry-run 口径、报告文件与即时查询必须交叉核对等判据。当任务要打开或运行 Vivado 工程、综合、实现、时序/CDC 分析、XDC 约束检查、ILA 调试，或需要判断「工具说成功是不是真的成功」时使用。"
+description: "**任务涉及 prj/project_*/.xpr/RTL/TB/仿真/综合/实现/时序/XDC/ILA 时，第一步就加载本技能**：先定位工程件（find-project.ps1/glob，别拿 project_root 拼路径），再走 mcp__vivado__* 与 kit 技能（parse_xpr / xdc_lint / run_tcl(script_path,background) 等），shell 与启动器只是兜底。Vivado 工作流纪律（本 kit 自带，非 AMD 原文）：定「先读工程 → xdc_lint → 复用既有综合/实现结果 → 确实必要时才综合并轮询进度」的顺序，以及 is_error=false 仍可能是 [ERROR]、CLI 桥一进程一调用、Vivado 全局串行、cwd 与 TEMP 必须纯 ASCII、结论必须带 file:line、大 Tcl stdout 先落文件再读 tail、safe_tcl 占位符必须独占一个词、检查类工具默认无损不得静默截断、版本分档（2023.1 有本仓记录 / 2025.2+ 必须重探）、长构建必须脱离进程树并用标记行判进度、板卡不在场时的离线/dry-run 口径、报告文件与即时查询必须交叉核对等判据。当任务要打开或运行 Vivado 工程、综合、实现、时序/CDC 分析、XDC 约束检查、ILA 调试，或需要判断「工具说成功是不是真的成功」时使用。"
 license: MIT
 metadata:
-  version: "1.3.0"
+  version: "1.3.1"
 baseline:
   amd_doc: "unspecified"
   tested_on: null
@@ -52,7 +52,7 @@ baseline:
 
 ## 1. 工作流顺序（按此顺序，不许跳步）
 
-1. **先读工程，而不是先跑工具**
+1. **先读工程，而不是先跑工具**（先定位：`tools/find-project.ps1 -Pattern *.xpr` 或 glob；**不要**用 `project_root` + 记忆拼路径——实测 2026-11-10：组员把 `<repo>/prj/project_13/prj13.xpr` 当成真路径，实际在 `.../prj13/vivado/prj13.xpr`）
    - 工程文件：`<project>.xpr`（`parse_xpr` / `get_project_info`）→ `part`、top、约束集、IP 清单；
    - 既有 run：`<proj>.runs/*/` 状态、`synth_1/runme.log`、`impl_1/runme.log`（首行自证版本，形如 `****** Vivado v2023.1 (64-bit)`）；
    - 既有报告：`*_utilization_synth.rpt`、`*_timing_summary_routed.rpt`、`*.rpx`；
@@ -69,6 +69,7 @@ baseline:
 
 ## 2. 判据纪律（这些「看起来成功」其实是失败）
 
+- **路径纪律：发现，不构造**：`.xpr` / `.bit` / `.ltx` / `.xci` / `.xdc` / 报告 / `.dcp` 的路径一律**先定位**（`tools/find-project.ps1` / glob / `Get-ChildItem`），不要从 `project_root` 拼；工具报「文件不存在」时用它给出的**候选路径**重试或重新定位，不要连续猜同一个形态。补丁 0011 起，`parse_xpr` / `parse_bit_header` / `parse_ltx` / `compare_xci` / `get_timing_report(report_file=)` / `run_tcl(script_path=)` / `xdc_lint(xdc_paths=)` 的报错会列出附近候选。
 - **`is_error=false` 不等于成功**：MCP 协议层的 `is_error` 只反映传输/协议失败；Vivado 把 `[ERROR] ...` 打进返回文本时它仍是 `false`。判据必须同时扫文本：`[ERROR]` / `ERROR:` / `CRITICAL WARNING` / `MCPError`。**见 `[ERROR]` 就是失败**，无论 `is_error` 说什么。
 - **CLI 桥一进程一调用**：桥类客户端（`mcp_ctl.py` 之类）每次调用都新起一个 MCP server 进程，会话**不跨进程** —— `start_session` 返回 ready 只在当次进程有效，下一条 `run_tcl` 必报「会话不存在」。多步操作写成**单进程脚本**；桥下只做单命令与离线工具。
 - **大 stdout 先落文件**：一次 `run_tcl`（如 `open_run synth_1`）可吐数千行 XDC/Unisim/CDC 日志。优先用 `report_*` / `get_run_progress`；必须跑 Tcl 时把 stdout 重定向到文件再读 tail。长构建经 PowerShell 管道捕获还会因子进程 stdout 被缓冲堵住而**假死**。

@@ -3,6 +3,8 @@
 > 读者：已经装好 `Vivado` 预设、准备真正干活的人（也供助手在选工具前对照）。
 > 工具名一律带前缀：MCP server 名是 `vivado`，所以会话里是 `mcp__vivado__<名字>`。名字与参数取自 `vivado-mcp` 0.3.26 的 `@mcp.tool` 签名（2026-10-25 用 AST 扫源码得到，共 **32** 个，与 `doctor.ps1` 第 7 项的判据一致）。
 > **2026-10-28 更新（P1 补丁，工具总数不变，仍 32）**：本包 `patches/vivado-mcp/` 给 4 个工具加参数 —— `run_tcl`（`script_path` / `background` / `log_file` / `stdout_tail_bytes` / `job_id`）、`check_bitstream_readiness`（`dcp_path` / `run_name`，且 run 不存在时返回 `N/A（不适用）`）、`get_timing_report`（`include_paths` / `max_paths`）、`xdc_lint`（已知良性族分组 / `benign_allowlist` / `show_benign`）。下表用 **P1** 标出这些参数；**没打补丁的原版没有它们**（传了会报未知参数）——调用报"未知参数"时先确认补丁是否已应用，不要改调用方去猜。**0010（2026-11-09）只改 3 个工具的描述顺序（把 `run_tcl` 的 batch/detached 路由前置），不改参数与行为。**
+> **2026-11-10 更新（补丁 0011，仍 32 个工具）**：给“文件不存在”的报错加**候选提示**——`parse_xpr` / `parse_bit_header` / `parse_ltx` / `compare_xci` / `get_timing_report(report_file=)` / `run_tcl(script_path=)` / `xdc_lint(xdc_paths=)` 在精确路径不存在时，会从最近的已存在父目录向下按扩展名列出附近候选（≤5 个、深度 ≤6、跳过 `.git`/`node_modules`/`.Xil`/`xsim.dir`/`.tmp`），并提示先定位工程根。**文件存在时输出与改前逐字节相同**。
+> **路径纪律（分发版必读）**：不要用 `project_root` + 记忆拼工程件路径（同一仓库既有 `<prj>/<proj>/<name>.xpr`，也有 `<prj>/<proj>/vivado/<name>.xpr`）。先定位：`powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\find-project.ps1 -Pattern *.xpr`（默认读 kit 的 `config.yml`）或 glob；工具报“文件不存在”时按其候选重试。
 > **分类依据**：签名里有没有文件参数（`file_path` / `report_file` / `xdc_paths` / `wcfg` / `files` / `script_path`）与有没有 `session_id`。带文件参数的可以不连会话；只带 `session_id` 的必须先 `start_session`。这是**按签名与 docstring 判定**，除下表标 `实测` 的三项外没有逐个实调。**分类按工具的"主形态"计数，不按形态重复计数**：`run_tcl` 既有会话形态（§4）又有脚本文件形态（§3），只在 §3 额外列一行说明，总数仍是 32。
 
 ---
@@ -101,3 +103,26 @@
 - `get_critical_warnings` 在"只给 `run_name`、不给 `session_id`"时能否定位工程目录，未实测。
 - `set_wave_zoom` / `set_wave_analog` 在无会话时能否只改文件，未实测（docstring 写的是改完要重载）。
 - `xdc_auto_fix` 的 `board` 取值集合未实测，先 `dry_run=True` 看计划再落地。
+
+## 8. 路径类工具速查（先定位，再调用）
+
+工程件位置**不能从 `project_root` 推断**（2026-11-10 实测：同仓库不同 prj 的 `.xpr` 层级不同）。先把真实路径找出来，再传给工具：
+
+```powershell
+# kit 自带定位器（任意机器：读 kit 的 config.yml 的 project_root）
+powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\find-project.ps1 -Pattern *.xpr
+powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\find-project.ps1 -Pattern *.bit  -Json
+```
+
+| 工具 | 路径参数 | 路径不存在时（补丁 0011 后） |
+|---|---|---|
+| `parse_xpr` | `file_path`（`.xpr`） | `[ERROR] .xpr 解析失败: XPR 文件不存在: <p>；附近找到候选: <…/vivado/xxx.xpr>` 或定位建议 |
+| `parse_bit_header` | `file_path`（`.bit`） | 同上（`*.bit` 候选） |
+| `parse_ltx` | `file_path`（`.ltx`） | 同上（`*.ltx` 候选） |
+| `compare_xci` | `file_a` / `file_b`（`.xci`） | `[ERROR] 文件 A/B 解析失败: XCI 文件不存在: <p>；附近找到候选…` |
+| `get_timing_report` | `report_file=` / `baseline_file=` | `[ERROR] 读取时序报告失败: 文件不存在…；附近找到候选…` |
+| `run_tcl` | `script_path=`（`.tcl`） | `script_path 不存在或不是文件: <p>；附近找到候选…` |
+| `xdc_lint` | `xdc_paths=`（`.xdc`） | 逐文件“读取失败”行后追加候选提示 |
+| `check_bitstream_readiness` | `dcp_path=` | 报告里写“存在: 否”（非错误），需自行定位 |
+
+原则：**发现，不构造**；工具报“不存在”时用它的候选或重新 `find-project`，不要连续猜同一形态。

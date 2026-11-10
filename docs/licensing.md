@@ -98,7 +98,7 @@
 
 ### 3.2 我们分发的是补丁，不是源码
 
-`patches/vivado-mcp/0001..0010` 是我们写的 `-u` 差分（0001–0009 改行为 / 默认值，0010 只改工具描述），共改上游 10 个文件（逐条见 `patches/vivado-mcp/README.md` §2）。补丁里引用了上游代码的上下文行，因此**仍需履行 Apache-2.0 的声明义务**：
+`patches/vivado-mcp/0001..0011` 是我们写的 `-u` 差分（0001–0009 改行为 / 默认值，0010 / 0011 只改工具描述与“文件不存在”的报错文本），共改上游 14 个文件并新增 1 个模块（`analysis/path_hints.py`；逐条见 `patches/vivado-mcp/README.md` §2）。补丁里引用了上游代码的上下文行，因此**仍需履行 Apache-2.0 的声明义务**：
 
 | 条款 | 履行 |
 |---|---|
@@ -126,7 +126,7 @@
 | 2 | 我们自己内容切换为 **MIT**（`LICENSE` 的 MIT 正文 + 第三方 carve-out 适用范围表） | ✅ 完成 |
 | 3 | `skills/**` 注记里的作者机器路径脱敏为 config 驱动占位符（`NOTICE` §1.3 记录） | ✅ 完成 |
 | 4 | 仓库由 private 转 **public**（`github.com/chemmy-11/dsh-vivado`），README 加 powered-by-dsh 与 Vivado 2023.1 徽章 | ✅ 完成 |
-| 5 | 10 个补丁按 `patches/vivado-mcp/README.md` §6 政策提上游 PR；上游接受后删补丁并登记「已上游化」 | ⬜ 待办（对外动作，需要人决定时机） |
+| 5 | 11 个补丁按 `patches/vivado-mcp/README.md` §6 政策提上游 PR；上游接受后删补丁并登记「已上游化」 | ⬜ 待办（对外动作，需要人决定时机） |
 | 6 | （可选）正式 SPDX 扫描（如 `reuse` / `scancode`）作为机器复核 | ⬜ 未做：本文件是人工取证版，不替代工具扫描 |
 
 ---

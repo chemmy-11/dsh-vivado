@@ -327,9 +327,11 @@ if ($null -ne $script:DshCli) {
     if (-not [string]::IsNullOrWhiteSpace($run.StdOut)) { $lines = @($run.StdOut -split "\r?\n") }
     $stageSlash = ConvertTo-SlashPath $StageDir
     $checks = @(
-        [pscustomobject]@{ Name = 'preset row "- id: preset-vivado" absent anywhere'; Pattern = [regex]::Escape('- id: preset-vivado') },
-        [pscustomobject]@{ Name = 'bundle banner "# == dsh-vivado" absent anywhere'; Pattern = [regex]::Escape('# == dsh-vivado') },
-        [pscustomobject]@{ Name = 'mcp row "- id: mcp-vivado" absent anywhere'; Pattern = [regex]::Escape('- id: mcp-vivado') },
+        # Exact-line patterns: a sibling bundle such as `dsh-vivado-team-link` shares the
+        # prefix, so substring checks would false-fail (seen 2026-11-10).
+        [pscustomobject]@{ Name = 'preset row "- id: preset-vivado" absent anywhere'; Pattern = '^\s*- id: preset-vivado\s*$' },
+        [pscustomobject]@{ Name = 'bundle banner "# == dsh-vivado" absent anywhere'; Pattern = '^#\s*==\s*dsh-vivado[ \t]*$' },
+        [pscustomobject]@{ Name = 'mcp row "- id: mcp-vivado" absent anywhere'; Pattern = '^\s*- id: mcp-vivado\s*$' },
         [pscustomobject]@{ Name = ('staging path reference "{0}" absent' -f $stageSlash); Pattern = [regex]::Escape($stageSlash) }
     )
     foreach ($c in $checks) {

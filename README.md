@@ -29,7 +29,7 @@
 | 一个叫 **`Vivado`** 的会话预设 | 新建会话时选它（默认仍是 `standard`）。它把「先读工程 → `xdc_lint` → 复用既有综合/实现结果 → 确实必要时才综合」这套顺序，以及「路径必须 ASCII、Vivado 全局串行、结论必须带证据」这类纪律写进了助手的行为准则 |
 | **32 个** `mcp__vivado__*` 工具 | 综合/实现、时序、利用率、CDC、XDC 检查、ILA 波形、会话管理等，全部通过 stdio MCP 直连本机 Vivado（第三方 `vivado-mcp` 提供） |
 | **8 个技能** | AMD 官方 6 件（RTL 综合日志分析、lint、仿真、版本管理、ILA、VIO，MIT）+ 2 件自研（AMD 文档检索、Vivado 工作流纪律）。**随包挂载，不往你的 `~/.dsh/skills` 写任何文件** |
-| **3 个随包运行脚本** | `tools/vivado-probe.ps1`（可靠探活，`vivado.bat -version` 不算）、`tools/vivado-run.ps1`（batch 运行；`-Detach` 起脱离进程树的长构建）、`tools/tcl-check.ps1`（用 Vivado 自带的 8.5.14 解释器做 Tcl 语法门禁）。会话里不必每次现写启动命令，也不会踩 `cmd /c` 二次套引号 |
+| **4 个随包运行脚本** | `tools/vivado-probe.ps1`（可靠探活，`vivado.bat -version` 不算）、`tools/vivado-run.ps1`（batch 运行；`-Detach` 起脱离进程树的长构建）、`tools/tcl-check.ps1`（用 Vivado 自带的 8.5.14 解释器做 Tcl 语法门禁）、`tools/find-project.ps1`（按 config 的 `project_root` 定位 `.xpr`/`.bit`/`.ltx`/`.dcp`/报告——**工程件路径先定位再调用**）。会话里不必每次现写启动命令，也不会踩 `cmd /c` 二次套引号 |
 | 体检与干净的卸载 | `doctor.ps1` 13 项逐条 PASS/WARN/FAIL 并给一句修法；`uninstall.ps1` 还原 profile 并清掉自己装的目录 |
 
 **适合谁**：Windows 上做 Xilinx/AMD FPGA、已经在用 DeepSeek Harness 桌面版、希望助手能真正操作 Vivado 而不是只在对话里出主意的人。
@@ -85,7 +85,7 @@ bundle 补丁、把这一层注册进你的 profile（改之前备份 `*.bak-<�
 
 ```sh
 # 推荐：Release 预构建 tarball（不依赖本机 HTTPS git）
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.2/dsh-vivado-preset-0.2.2.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.3/dsh-vivado-preset-0.2.3.tgz
 # 备选：GitHub 子目录 URL（pnpm 会走 HTTPS git；本机 HTTPS 只通 SSH 时会失败，用上面的 tarball）
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
 ```
@@ -154,10 +154,10 @@ dsh-vivado/
   package.json              bundle 清单（一个配置型 DSH bundle）
   install.ps1  uninstall.ps1  doctor.ps1  lib/   安装、卸载、体检
   config.example.yml        配置样板（安装器会据此生成 config.yml）
-  tools/                    渲染器、模板生成器、技能清单生成器 + 3 个运行辅助脚本
+  tools/                    渲染器、模板生成器、技能清单生成器 + 4 个运行辅助脚本
   templates/                preset 模板、shipped 22 行审计件、persona/ 两档片段、build-markers.tcl
   skills/                   8 个技能 + MANIFEST.json + 来源说明
-  patches/vivado-mcp/       10 个可选补丁 + 许可证全文 + 应用/验证说明
+  patches/vivado-mcp/       11 个可选补丁 + 许可证全文 + 应用/验证说明
   docs/                     安装详解、体检详解、版本表、原理、排错、许可
   NOTICE  LICENSE  README.md  README.en.md
 ```
@@ -185,7 +185,7 @@ dsh-vivado/
 - **AMD 官方 6 件技能**：MIT（© 2026 Advanced Micro Devices, Inc.），取自 Vivado AI Extension 的
   `plugin-bundled/skills/`，我们改动的文件已在 `NOTICE` §1.3 逐条列出；
 - **取自 DeepSeek Harness 的 22 条预设插件行**：MIT（© 2026 DeepSeek）；
-- **`vivado-mcp`**：第三方项目，Apache-2.0；本仓库**不含其源码**，只带 10 个 `.patch`（许可证全文随包）。
+- **`vivado-mcp`**：第三方项目，Apache-2.0；本仓库**不含其源码**，只带 11 个 `.patch`（许可证全文随包）。
 
 MIT 只覆盖我们原创的部分，第三方条款见 [`NOTICE` §3.0](NOTICE) 与 [`docs/licensing.md`](docs/licensing.md)。
 与 AMD / Xilinx / DeepSeek 均无隶属或背书关系，产品名仅为指称。

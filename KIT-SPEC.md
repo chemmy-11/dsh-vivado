@@ -4,7 +4,7 @@
 > 前序事实：`作者本机笔记库\作者本机的规范化取证记录（未随仓库发布）`
 >
 > **2026-10-25 增补（本文件=2026-10-24 的历史分工记录，按历史件读）**：本轮按《dsh-vivado 实战问题与改进》
-> 加了 `tools/vivado-probe.ps1`、`tools/vivado-run.ps1`、`tools/tcl-check.ps1`、`templates/build-markers.tcl`、
+> 加了 `tools/vivado-probe.ps1`、`tools/vivado-run.ps1`、`tools/tcl-check.ps1`、`tools/find-project.ps1`、`templates/build-markers.tcl`、
 > `docs/tools.md`；persona 两档**去掉对第三方 shell（`win_bash`）的依赖**，改为只用会话里真实存在的官方
 > `pwsh`/`bash`；渲染器 `$values` 由 14 键变 15 键（新增 `{{KIT_DIR}}`）。现役契约以 `docs/architecture.md` 为准。
 
@@ -41,7 +41,7 @@ D:\dsh-vivado\
 | `skills/**` | **ps-skills** | AMD 6 件 + 自研纪律 skill + `skills/NOTICE-skills.md` |
 | `NOTICE` / `LICENSE` / `README.md` | **ps-docs** | 来源/许可/改动清单/快速开始 |
 | `docs/version-matrix.md` | **ps-docs** | 版本真值分档表（T4） |
-| `patches/vivado-mcp/**` | **ps-docs** | 10 个 MCP 补丁的 `.patch` 归档 + README |
+| `patches/vivado-mcp/**` | **ps-docs** | 11 个 MCP 补丁的 `.patch` 归档 + README |
 
 共享只读：`<project_root>\.tmp\kit-recon-2026-10-24\`（asar 取证的官方文档副本，`refs/`、`pkg-skillfs/`）
 

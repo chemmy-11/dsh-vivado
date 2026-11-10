@@ -194,7 +194,7 @@ py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dum
 
 | 组 | 条数 | 覆盖 | 代表断言 |
 |---|---:|---|---|
-| `static` | 10 | 生成器/渲染器/技能清单/**独立预设包**/卫生 | 两档各渲染+校验一次；`py tools\build_preset_package.py --check`（`packages/dsh-vivado-preset/` 的 patch 与 8 个技能副本必须与模板/`skills/` 逐字节一致）；仓库里没有 `__pycache__`/`.bak-*`/`config.yml`；3 个运行辅助脚本 + `templates/build-markers.tcl` 在场且纯 ASCII；仓库文本里没有作者主目录路径（`skills/` 与 `packages/*/skills` 是 vendored、`dev/` 是维护者工具，均豁免） |
+| `static` | 10 | 生成器/渲染器/技能清单/**独立预设包**/卫生 | 两档各渲染+校验一次；`py tools\build_preset_package.py --check`（`packages/dsh-vivado-preset/` 的 patch 与 8 个技能副本必须与模板/`skills/` 逐字节一致）；仓库里没有 `__pycache__`/`.bak-*`/`config.yml`；4 个运行辅助脚本（含 `tools/find-project.ps1`）+ `templates/build-markers.tcl` 在场且纯 ASCII；仓库文本里没有作者主目录路径（`skills/` 与 `packages/*/skills` 是 vendored、`dev/` 是维护者工具，均豁免） |
 | `install` | 20 | `-Mode auto` 真装 + 组合快照 + **schema 门禁** + 幂等 + `-WhatIf` + 红线 | 依赖写成 `link:<home>\bundles\...`；bundle 只追加一次；`--dump-config` 四条标记；**渲染后的 patch 与组合后的 dump 都过一遍当前 DSH 的 `--dump-config-schema`**（该 DSH 不暴露 schema 时记 `[SKIP]`，不冒充 PASS）；第二次装 `package.json` sha 不变；`-WhatIf` 前后字节不变；`%USERPROFILE%\.dsh\skills` 未被写 |
 | `uninstall` | 7 | 干净移除 | 依赖行/`bundles` 行/staging/`node_modules` 联接全没了；`--dump-config` 仍能组合；第二次卸是 no-op |
 | `manual` | 4 | `-Mode manual`（完全不用 pnpm） | 依赖与 bundle 行就位；组合出 `preset-vivado` + `mcp-vivado` |

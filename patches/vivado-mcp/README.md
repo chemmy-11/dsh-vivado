@@ -1,12 +1,12 @@
-# vivado-mcp 本地补丁归档（10 个 unified diff）
+# vivado-mcp 本地补丁归档（11 个 unified diff）
 
-> 归档日期 2026-10-24（0001–0004）· 2026-10-28 追加（0005–0009）· 2026-11-09 追加（0010）· 维护：`ps-docs` · 作用域：本目录只放 **补丁文件**，不放第三方源码。
+> 归档日期 2026-10-24（0001–0004）· 2026-10-28 追加（0005–0009）· 2026-11-09 追加（0010）· 2026-11-10 追加（0011）· 维护：`ps-docs` · 作用域：本目录只放 **补丁文件**，不放第三方源码。
 > 一句话：`vivado-mcp` 是**第三方**资产（Apache-2.0，版本 0.3.26），本 kit 既不是它的作者，也不做它的私有分支；
 > 我们只在它上面打了 10 个改动，以 `.patch` 形式随包，便于使用者复核、上游报 PR、或随时反向卸载。
 >
-> **叠加顺序（重要）**：0001–0004 打在 pip 原样（`RECORD`）上；**0005–0010 的基线是"前序补丁已应用之后"的现文件**，
-> 按 **0005 → 0006 → 0007 → 0008 → 0009 → 0010** 顺序应用（0008 的 `report_tools.py` 段依赖 0007 先落）。全部 10 个应用后，
-> `site` 下有 **10 个文件**与 pip `RECORD` 的 sha256 不一致（§9.2 的对账命令实测输出），这就是本目录全部本地改动。
+> **叠加顺序（重要）**：0001–0004 打在 pip 原样（`RECORD`）上；**0005–0011 的基线是"前序补丁已应用之后"的现文件**，
+> 按 **0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011** 顺序应用（0008 的 `report_tools.py` 段依赖 0007 先落）。全部 11 个应用后，
+> `site` 下有 **14 个文件**与 pip `RECORD` 的 sha256 不一致、另有 **1 个新增文件** `vivado_mcp/analysis/path_hints.py`（§9.3 的对账命令实测输出）——这就是本目录全部本地改动。
 
 ---
 
@@ -48,7 +48,7 @@
 
 ```powershell
 # 全站对账（2026-10-24 首次归档时）：只有 4 个文件与 RECORD 不一致 ⇒ 0001–0004 是第一轮全部本地改动
-# （2026-11-09 现为 10 个文件，见 §9.2）
+# （2026-11-10 现为 14 个文件 + 1 个新增文件，见 §9.3）
 py -c "import base64,hashlib,os;root=r'<vivado-mcp>/site';mod=[];[mod.append(p.split(',')[0]) for p in open(os.path.join(root,'vivado_mcp-0.3.26.dist-info/RECORD'),encoding='utf-8') if p.split(',')[1].startswith('sha256=') and os.path.isfile(os.path.join(root,p.split(',')[0])) and base64.urlsafe_b64encode(hashlib.sha256(open(os.path.join(root,p.split(',')[0]),'rb').read()).digest()).decode().rstrip('=')!=p.split(',')[1][7:]];print(len(mod),mod)"
 # 实测输出： 4 ['vivado_mcp/analysis/xdc_linter.py', 'vivado_mcp/tools/cdc_tools.py', 'vivado_mcp/tools/diagnostic_tools.py', 'vivado_mcp/tools/tcl_tools.py']
 
@@ -80,12 +80,18 @@ py -c "import base64,hashlib,os;root=r'<vivado-mcp>/site';mod=[];[mod.append(p.s
 |---|---|---|---:|---:|---|
 | `0010-tool-routing-descriptions.patch` | `tools/tcl_tools.py` + `tools/flow_tools.py` | `.bak-p2-20261109`（= 0001–0009 后） | 66 379 → 67 402 B；24 220 → 24 930 B | +11 / −0；+10 / −0 | **只改 docstring（工具描述），不改任何行为**：把「长任务 / 离线构建用 `run_tcl(script_path=…, background=True)`，会话内 `command=` 只适合秒级查询」与「`run_synthesis` / `run_implementation` 只覆盖工程 run，checkpoint 流程走 `run_tcl`」放到描述**最前面**。2026-11-08 prj13 会话实测：模型整轮只用 `vivado-run.ps1` 启动器、0 次 `mcp__vivado__*`，自述把 MCP 工具当成"只在交互式排查时才用"——描述顺序是诱因之一 |
 
+### 2.3 2026-11-10 追加的 1 个补丁（基线 = 0001–0010 应用后的现文件）
+
+| 补丁 | 目标文件 | 基线 | 大小变化 | 增/删行 | 解决什么（实测依据） |
+|---|---|---|---:|---:|---|
+| `0011-missing-path-hints.patch` | 新增 `analysis/path_hints.py`；`analysis/xpr_parser.py` `bit_header_parser.py` `ltx_parser.py` `xci_parser.py` `timing_evidence.py`；`tools/tcl_tools.py` `diagnostic_tools.py` | `.bak-p3-20261110`（= 0001–0010 后） | 新模块 123 行 / 4 714 B；7 个文件各 +2~3 行 | +18 / −6（7 个文件，不含新文件） | **只改"文件不存在"的报错文本**：精确路径不存在时，从最近的已存在父目录向下按扩展名找候选（深度 ≤6、目录 ≤2000、最多 5 个、跳过 `.git`/`node_modules`/`.Xil`/`xsim.dir`/`.tmp`），并提示先定位工程根。实测 2026-11-10：组员把 `.xpr` 拼成 `<repo>/prj/project_13/prj13.xpr`（真实在 `.../prj/project_13/vivado/prj13.xpr`），旧报错只有一句"不存在"，模型会继续猜。成功路径（文件存在）行为逐字节不变 |
+
 **四条硬约束（都在本机实测过）**：
 
-1. **叠加顺序固定**：`0005 → 0006 → 0007 → 0008 → 0009 → 0010`；每个补丁的基线都是前一个应用后的现文件（`0008` 的 `report_tools.py` 段依赖 `0007`）。
-2. **工具面不变**：10 个补丁应用后 `mcp_ctl.py list` 仍是 **32** 行；0001–0009 都是往已有工具上加参数 / 改默认值，0010 只改 docstring，不新增 `@mcp.tool`。
+1. **叠加顺序固定**：`0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011`；每个补丁的基线都是前一个应用后的现文件（`0008` 的 `report_tools.py` 段依赖 `0007`）。
+2. **工具面不变**：11 个补丁应用后 `mcp_ctl.py list` 仍是 **32** 行；0001–0009 都是往已有工具上加参数 / 改默认值，0010 只改 docstring，不新增 `@mcp.tool`。
 3. **默认值向后兼容**：不传新参数时输出与 0.3.26 逐字节相同（`get_timing_report` 默认输出 sha256 与改前相同；`xdc_lint` 默认条数 109 == 109）。
-4. **反打自检**：在本机 2026-11-09 现树上 `git -c core.autocrlf=false apply -R --check -p1` 实测 **0004–0010 7/7 REVERSE-OK**（0001–0003 需先 reverse 后续补丁才能单独反打，属正常）；从各自基线正打后的文件与现文件 sha256 相等（含 0005 的 `ea0a8686…`、0010 的 `220a3bc7…` / `3585ddd7…`）。
+4. **反打自检**：2026-11-10 在现树上按 **0011 → 0001** 逆序反打 **11/11 rc=0**，回到 pip `RECORD` 原样（对账 0 差异、`path_hints.py` 被删）；**单补丁直反**时 `0004`、`0006–0011` 均 rc=0（`0005` 需先 reverse `0010`/`0011`；`0001–0003` 需先 reverse 后续补丁，属正常）。从各自基线正打后的文件与现文件 sha256 相等（含 0005 的 `ea0a8686…`、0010 的 `220a3bc7…` / `3585ddd7…`、0011 的 `338498da…`）。
 
 
 ## 3. 每个补丁改了什么、为什么
@@ -137,6 +143,13 @@ py -c "import base64,hashlib,os;root=r'<vivado-mcp>/site';mod=[];[mod.append(p.s
 - **为什么要它**：2026-11-08 prj13 离线任务首轮 **98 次工具调用、0 次 `mcp__vivado__*`**，只用了启动器；模型自述"把它们当成只在交互式排查时才用"。`run_tcl` 描述前 100+ 行都是 XSim / 波形交互坑，`script_path` + `background` 在描述末尾才出现 —— 描述顺序与预设里更具体的启动器指令叠加，形成「MCP = 交互调试」的错误先验。预设 persona 与 `vivado-workflow-discipline` 技能已同步改（kit 0.2.2），本条是工具侧的第二道保险。
 - **生效条件**：MCP server 启动时读取 docstring ⇒ **重启宿主 / 会话**后新描述才可见（doctor 不读描述，`mcp_ctl.py list` 只列名字 + 首行说明）。
 
+### 3.4c `0011`（2026-11-10 追加；只改"文件不存在"的报错文本）
+
+- **改什么**：新增 `analysis/path_hints.py`（`suggest_paths` / `path_hint` / `missing_file_message`）；接入 `parse_xpr` / `parse_bit_header` / `parse_ltx` / `compare_xci` 的 `FileNotFoundError`、`get_timing_report(report_file=)` 的文本读取、`run_tcl(script_path=)` 的路径校验、`xdc_lint(xdc_paths=)` 的逐文件读取错误。
+- **不改什么**：文件存在时**不进**该分支 —— 任何工具的返回值 / 默认值 / schema / 工具数（仍 32）都不变，只在"路径不存在"的报错里追加候选或定位建议。
+- **为什么要它**：2026-11-10 组员会话实测：`parse_xpr("…/prj/project_13/prj13.xpr")` → `[ERROR] .xpr 解析失败: XPR 文件不存在: …`，而真实文件在 `…/prj/project_13/vivado/prj13.xpr`。同一仓库不同 prj 的 `.xpr` 层级不同（`<proj>/<name>.xpr` 与 `<proj>/vivado/<name>.xpr` 都有），无法推断。kit 侧同时新增 `tools/find-project.ps1` 和 persona/技能规则"发现，不构造"。
+- **生效条件**：MCP server 启动时 import 模块 ⇒ **重启宿主 / 会话**后生效。doctor 第 11 项新增第 12 组内容探针 `missing_file_message`。
+
 ## 3.5 许可合规（Apache-2.0，第一次用请读这 20 行）
 
 `vivado-mcp` 是 **Apache-2.0**（`vivado_mcp-0.3.26.dist-info/METADATA` 的 `License-Expression: Apache-2.0`）。
@@ -146,7 +159,7 @@ py -c "import base64,hashlib,os;root=r'<vivado-mcp>/site';mod=[];[mod.append(p.s
 | Apache-2.0 条款 | 我们怎么履行 |
 |---|---|
 | §4(a) 给接收者一份许可证 | 就是同目录这份 `LICENSE-APACHE-2.0.txt`；`NOTICE` §2.1 也指向它 |
-| §4(b) 被修改的文件要带「已修改」显著提示 | 本 kit 只发补丁、不发源码；**打了补丁的人**才是被改文件的产生者。建议在改过的文件头部加一行（任选，二选一即可）：<br>`# Modified by dsh-vivado patches (patches/vivado-mcp/0001..0010); see NOTICE §2.1.`<br>或保留本目录的 `README.md` 与之一起分发 |
+| §4(b) 被修改的文件要带「已修改」显著提示 | 本 kit 只发补丁、不发源码；**打了补丁的人**才是被改文件的产生者。建议在改过的文件头部加一行（任选，二选一即可）：<br>`# Modified by dsh-vivado patches (patches/vivado-mcp/0001..0011); see NOTICE §2.1.`<br>或保留本目录的 `README.md` 与之一起分发 |
 | §4(c) 保留版权/专利/商标/归属声明 | 补丁是 `-u` 上下文差分，原文件的版权头与文件头都保留在上下文里，未做剥离 |
 | §4(d) 若上游有 NOTICE 则转发 | 2026-10-24 核对上游仓库根目录：**没有** `NOTICE`/`NOTICE.md`（只有 `LICENSE`），故无内容需转发 |
 | §6 无商标授权 | 本 kit 不使用上游商标/logo；`AMD`/`Xilinx`/`Vivado` 等仅为指称（见 `NOTICE` §3.2） |
@@ -174,12 +187,14 @@ git -c core.autocrlf=false apply -p1 <kit>\patches\vivado-mcp\0008-timing-includ
 git -c core.autocrlf=false apply -p1 <kit>\patches\vivado-mcp\0009-xdc-autofix-skip-benign.patch
 # 第三组（基线 = 第二组应用后的现文件）
 git -c core.autocrlf=false apply -p1 <kit>\patches\vivado-mcp\0010-tool-routing-descriptions.patch
+# 第四组（基线 = 0001–0010 应用后的现文件）
+git -c core.autocrlf=false apply -p1 <kit>\patches\vivado-mcp\0011-missing-path-hints.patch
 ```
 
-- **必须带 `-c core.autocrlf=false`**：本机 `core.autocrlf=true` 时 `git apply` 会把补丁里的 LF 写成 CRLF，结果文件与上游其余文件行尾不一致（实测踩到：应用后 3 047 B → 3 112 B）。补丁本身全是 LF（10/10 实测 `CRLF=0`）。
+- **必须带 `-c core.autocrlf=false`**：本机 `core.autocrlf=true` 时 `git apply` 会把补丁里的 LF 写成 CRLF，结果文件与上游其余文件行尾不一致（实测踩到：应用后 3 047 B → 3 112 B）。补丁本身全是 LF（11/11 实测 `CRLF=0`）。
 - **第二组不能乱序**：`0008` 的 `report_tools.py` 段基线是 `0007` 应用后的现文件；`0005` 又改了 `0001` 的上下文（先 `0001` 后 `0005` 才成立）。
 - 没有 git 的环境用 `patch -p1 < 0001-....patch`（POSIX `patch` 同样只认相对路径，行尾不会被转换）。**本条未在本机验证**：本机 MSYS2/Git Bash 里没有 `patch` 命令（`patch: command not found`），验收用的是 `git apply`。
-- `site` 目录不是 git 仓库也能打：实测在**裸目录**（无 `.git`）里 `git -c core.autocrlf=false apply --check -p1` 4/4 通过、应用后与现文件逐字节相同（`BARE_DIR_IDENTICAL=1`）；0005–0010 同样在裸 scratch 树上验证（从各自基线 `.bak-p1-20261028` / `.bak-p2-20261109` 起 → 应用后 sha256 与现文件相等）。
+- `site` 目录不是 git 仓库也能打：实测在**裸目录**（无 `.git`）里 `git -c core.autocrlf=false apply --check -p1` 4/4 通过、应用后与现文件逐字节相同（`BARE_DIR_IDENTICAL=1`）；0005–0011 同样在裸 scratch 树上验证（从各自基线 `.bak-p1-20261028` / `.bak-p2-20261109` / `.bak-p3-20261110` 起 → 应用后 sha256 与现文件相等；其中 0011 的 scratch 树还验证了**新增文件按补丁创建**）。
 
 ## 5. 怎么验证「装好了」与「补丁打上了」
 
@@ -205,7 +220,7 @@ foreach ($p in (Get-ChildItem <kit>\patches\vivado-mcp\*.patch)) {
 
 已打过补丁的文件能**反向**干净还原 ⇒ 该补丁就位；文件被别的版本/别的改动动过则报 `patch does not apply`。
 实测：**0001–0004 在 2026-10-24 的树上 4/4 REVERSE-OK；0005–0009 在 2026-10-28 的树上 9/9 REVERSE-OK**（含 0005；注意 0005 改了 0001 的上下文 —— 想验 0001 要先 reverse 0005，否则报 `does not apply` 属正常）。
-另：0005–0010 的**正打**自检口径是「从各自基线（`.bak-p1-20261028` / `.bak-p2-20261109`）起、按序应用后与现文件 sha256 相等」，不是只 `--check`。**2026-11-09 复验：0004–0010 在本机现树上 7/7 REVERSE-OK**（0001–0003 仍需先 reverse 后续补丁）。
+另：0005–0011 的**正打**自检口径是「从各自基线（`.bak-p1-20261028` / `.bak-p2-20261109` / `.bak-p3-20261110`）起、按序应用后与现文件 sha256 相等」，不是只 `--check`。**2026-11-10 复验：逆序 0011→0001 全部 rc=0（回到 `RECORD` 原样 0 差异）；单补丁直反 0004、0006–0011 均 rc=0**（0005 需先 reverse 0010/0011；0001–0003 需先 reverse 后续补丁）。
 
 ### 5.3 签名行（不想碰 git 时的快速 grep，PowerShell 原生写法，已实测）
 
@@ -221,6 +236,7 @@ Select-String -SimpleMatch 'RUN_NOT_FOUND'         -Path vivado_mcp\tcl_scripts.
 Select-String -SimpleMatch 'include_paths'         -Path vivado_mcp\analysis\timing_parser.py  # 0008
 Select-String -SimpleMatch '_is_benign'           -Path vivado_mcp\analysis\xdc_auto_fixer.py  # 0009
 Select-String -SimpleMatch 'Routing summary: offline/long builds' -Path vivado_mcp\tools\tcl_tools.py  # 0010（ASCII 标记；另有中文标题行）
+Select-String -SimpleMatch 'missing_file_message'                -Path vivado_mcp\analysis\xpr_parser.py  # 0011
 ```
 
 实测输出（2026-10-24，本机现装）：
@@ -246,10 +262,12 @@ Select-String -SimpleMatch 'Routing summary: offline/long builds' -Path vivado_m
 
 - **工具描述前置路由（0010，无行为变化）**：`py -c "import sys;sys.path.insert(0,r'<vivado-mcp>\site');from vivado_mcp.tools.tcl_tools import run_tcl;print('Routing summary: offline/long builds' in run_tcl.__doc__)"` → `True`；`run_synthesis` / `run_implementation` 同法查 `路由提示`。只改描述 ⇒ 工具名、`input_schema`、默认输出都不应变。
 
+- **路径猜错给候选（0011，只改报错文本）**：`parse_xpr(<不存在但附近有 vivado/<name>.xpr 的路径>)` → 报错追加「附近找到候选（请用真实路径重试）: <真实路径>」；`parse_bit_header` / `parse_ltx` / `compare_xci` / `get_timing_report(report_file=)` / `run_tcl(script_path=)` / `xdc_lint(xdc_paths=)` 同理。文件存在时输出与改前逐字节相同。
+
 ## 6. 上游政策：PR 优先，不做私有分支
 
 - **不做私有 fork**：`<vivado-mcp>\site` 不是我们的仓库，我们**不重分发修改后的源码**，只随包给 `.patch`；本 kit 也不包含 `vivado-mcp` 本体（用 `pip install vivado-mcp==0.3.26` 自装）。
-- **优先上游 PR**：按 Apache-2.0 §4(b)，被修改的文件必须带「已修改」提示；把改动留在我们自己的 patch 里、由使用者显式应用，比静默发一份改过的源码更符合该义务（也让上游可审）。`0001`–`0010` 每条都能独立成 PR；`docs/version-matrix.md` 与 `skills/` 里引用了坑号，PR 描述可直接抄 §3 / §3.4a。
+- **优先上游 PR**：按 Apache-2.0 §4(b)，被修改的文件必须带「已修改」提示；把改动留在我们自己的 patch 里、由使用者显式应用，比静默发一份改过的源码更符合该义务（也让上游可审）。`0001`–`0011` 每条都能独立成 PR；`docs/version-matrix.md` 与 `skills/` 里引用了坑号，PR 描述可直接抄 §3 / §3.4a。
 - 上游若接受（或自己改了同名默认值），本目录对应补丁应删除并在 `NOTICE` §2 记录「已上游化」。
 
 ## 7. 上游升级到新版本后怎么重新生成
@@ -260,7 +278,7 @@ py -m pip install --target <vivado-mcp>\site vivado-mcp==<新版本>
 cd <vivado-mcp>\site
 #    用 dist-info\RECORD 的 sha256 逐个核对哪些文件被本 kit 改过（见 §2 命令）
 # 2) 新版本上重放旧补丁：能干净应用 → 直接沿用；冲突 → 按 §3 的语义重新实现
-#    注意两组基线不同：0001–0004 对 pip 原样；0005–0010 对"前序补丁已应用"的副本
+#    注意两组基线不同：0001–0004 对 pip 原样；0005–0011 对"前序补丁已应用"的副本
 git -c core.autocrlf=false apply --check -p1 <旧补丁>
 # 3) 重新生成（基线 = 上一组应用后的副本，目标 = 改好后的现文件）
 diff -u --label a/vivado_mcp/tools/tcl_tools.py --label b/vivado_mcp/tools/tcl_tools.py `
@@ -319,20 +337,25 @@ cdc_tools.py:23: report_file: str = "", max_details: int = 0,
 ### 9.1 2026-10-28 追加批次的验证输出
 
 ```text
-# 全站对账（RECORD 口径）：4 → 10 个文件与 pip 原样不一致
-10
-  vivado_mcp/analysis/timing_evidence.py      (0007)
+# 全站对账（RECORD 口径）：4 → 14 个文件与 pip 原样不一致（另有 1 个新增文件不在 RECORD 里）
+14
+  vivado_mcp/analysis/bit_header_parser.py    (0011)
+  vivado_mcp/analysis/ltx_parser.py           (0011)
+  vivado_mcp/analysis/timing_evidence.py      (0007 + 0011)
   vivado_mcp/analysis/timing_parser.py        (0008)
+  vivado_mcp/analysis/xci_parser.py           (0011)
   vivado_mcp/analysis/xdc_auto_fixer.py       (0009)
   vivado_mcp/analysis/xdc_linter.py           (0002 + 0006)
+  vivado_mcp/analysis/xpr_parser.py           (0011)
   vivado_mcp/tcl_scripts.py                   (0007)
   vivado_mcp/tools/cdc_tools.py               (0004)
-  vivado_mcp/tools/diagnostic_tools.py        (0003 + 0006)
+  vivado_mcp/tools/diagnostic_tools.py        (0003 + 0006 + 0011)
   vivado_mcp/tools/flow_tools.py              (0010)
   vivado_mcp/tools/report_tools.py            (0007 + 0008)
-  vivado_mcp/tools/tcl_tools.py               (0001 + 0005 + 0010)
+  vivado_mcp/tools/tcl_tools.py               (0001 + 0005 + 0010 + 0011)
+  vivado_mcp/analysis/path_hints.py            (0011，新增文件，不在 RECORD)
 
-# 反向试打：2026-11-09 复验 0004–0010 = 7/7 REVERSE-OK（0001–0003 需先 reverse 后续补丁才能单独反打，属正常）
+# 反向试打：2026-11-10 逆序 0011→0001 全部 rc=0，回到 RECORD 原样（0 差异、path_hints.py 已删除）；单补丁直反 0004、0006–0011 均 rc=0
 # 正打：从 .bak-p1-20261028 起 0005→0009 顺序应用，与现文件 sha256 相等
 #   0005: 18 073 B → 66 379 B, +1154/−7, sha256 7371191d...
 # 工具面：mcp_ctl.py list = 32；run_tcl input_schema 10 个参数（ctx 由框架注入）
@@ -378,4 +401,22 @@ cdc_tools.py:23: report_file: str = "", max_details: int = 0,
 # 工具面：mcp_ctl.py list = 32（0010 不新增工具）
 # 描述生效：run_tcl docstring 含「工具路由（先读）」；run_synthesis / run_implementation 含「路由提示」
 #   只改 docstring ⇒ 三个工具的签名 / 默认值 / 输出不变
+```
+
+### 9.3 2026-11-10 追加 0011 的验证输出
+
+```text
+# 正打（scratch = .bak-p3-20261110 副本 + 补丁创建新文件）：
+#   0011-missing-path-hints.patch APPLIES CLEANLY
+#   8 个文件（含新增 path_hints.py）应用后与现文件 sha256 相等
+# 反打：0011 REVERSE-OK；整链逆序 0011→0001 全部 rc=0，
+#   回到 pip RECORD 原样：RECORD 对账 0 差异，path_hints.py 已删除
+# 工具面：mcp_ctl.py list = 32（0011 不新增工具、不改参数）
+# 行为（合成的 <repo>/prj/project_13/vivado/prj13.xpr 布局）：
+#   旧： [ERROR] .xpr 解析失败: XPR 文件不存在: .../prj/project_13/prj13.xpr
+#   新： [ERROR] .xpr 解析失败: XPR 文件不存在: .../prj/project_13/prj13.xpr；
+#        附近找到候选（请用真实路径重试）: .../prj/project_13/vivado/prj13.xpr
+#   无候选时：...；附近未找到匹配 *.xpr 的文件：先确认工程根/产物目录
+#             （可用 kit 的 tools/find-project.ps1 或 glob 定位），不要继续猜路径
+# 成功路径：parse_xpr(真实 .xpr) 仍正常返回 XprConfig（未进入 hint 分支）
 ```

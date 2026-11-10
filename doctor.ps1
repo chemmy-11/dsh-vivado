@@ -1125,6 +1125,11 @@ function Test-CheckMcpPatches {
             Label = 'tool routing descriptions (patch 0010)'
             File  = (Join-Path $site 'vivado_mcp\tools\tcl_tools.py')
             Any   = @('Routing summary: offline/long builds')
+        },
+        @{
+            Label = 'missing-path candidates (patch 0011)'
+            File  = (Join-Path $site 'vivado_mcp\analysis\xpr_parser.py')
+            Any   = @('missing_file_message')
         }
     )
     $present = New-Object System.Collections.Generic.List[string]

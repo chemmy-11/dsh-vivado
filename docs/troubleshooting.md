@@ -176,6 +176,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File <kit>\tools\tcl-check.ps1 <�
 
 - 判据：`TCLCHECK_RESULT=PASS` 才算过；失败会打 `TCLCHECK_TAIL|` 明细行。`complete=1` 是 `info complete` 的结论，只保证"这份文件是完整命令序列"，不保证运行时语义正确。
 
+### 2.15 工具报「`XPR 文件不存在`」/「`.bit 文件不存在`」/「`LTX 文件不存在`」/「`script_path 不存在`」
+
+**先别换路径再猜**：这类报错几乎都不是“文件真没了”，而是**路径拼错**。2026-11-10 实测（组员机）：
+`parse_xpr` 收到 `<repo>/prj/project_13/prj13.xpr`，真实文件在 `<repo>/prj/project_13/vivado/prj13.xpr`
+（同一仓库里 `<prj>/<proj>/<name>.xpr` 与 `<prj>/<proj>/vivado/<name>.xpr` 两种布局都有，**无法从 `project_root` 推断**）。
+
+1. **先定位**（任意机器可用）：`powershell -NoProfile -ExecutionPolicy Bypass -File <staging>\tools\find-project.ps1 -Pattern *.xpr`
+   （默认读 kit 的 `config.yml` 的 `project_root`；`-Json` 可机读；没装 kit 时用 `glob` / `Get-ChildItem -Recurse`）。
+2. **用工具给的候选**：打过补丁 `0011` 后，`parse_xpr` / `parse_bit_header` / `parse_ltx` / `compare_xci` /
+   `get_timing_report(report_file=)` / `run_tcl(script_path=)` / `xdc_lint(xdc_paths=)` 的“不存在”报错会直接列出
+   「附近找到候选（请用真实路径重试）: …」——按那个路径重调即可；没有候选时会提示先确认工程根。
+3. **别用 `project_root` + 记忆拼**：`.xpr` / `.bit` / `.ltx` / `.dcp` / 报告的位置一律先定位再传参；
+   模型侧规则见 `Vivado` persona 的 "Discover, don't construct" 与 `vivado-workflow-discipline` §1。
+4. 确认文件真的缺失再走“重新生成产物”的流程（综合/实现/bitstream），不要拿“工具报不存在”当作构建失败证据。
+
 ## 3. `doctor.ps1` 13 项速查
 
 ```powershell
@@ -196,7 +211,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1 -Quick   # 跳�
 | 8 | `license` | 静态 license 线索（环境变量 / `*.lic`） | 命中线索=PASS；无线索或路径失效=WARN；**永不 FAIL** | 设 `XILINXD_LICENSE_FILE`；失败也照跑（可能来自服务器/评估模式） |
 | 9 | `bundle-installed` | 依赖行 + `link:` 目录存在 + `dsh.profile.bundles` | 三者齐=PASS；裸 profile（零痕迹）=WARN；半装/坏装=FAIL | 跑 `install.ps1 -Profile <profile>` |
 | 10 | `bundle-rendered` | `<staging>\cordis.patch.yml` 无残留占位符、`customSkillDirs` 目录存在 | 全过=PASS；staging 不存在=WARN；缺失/残留/目录不存在=FAIL | 重跑 `install.ps1`（会重新渲染） |
-| 11 | `mcp-patches` | 11 组源码内容标记（10 个补丁是否在位） | 11/11=PASS；有缺失或 site 不可用=WARN；**永不 FAIL** | 按 `patches/vivado-mcp/README.md` §4 打补丁 |
+| 11 | `mcp-patches` | 12 组源码内容标记（11 个补丁是否在位） | 12/12=PASS；有缺失或 site 不可用=WARN；**永不 FAIL** | 按 `patches/vivado-mcp/README.md` §4 打补丁 |
 | 12 | `compatibility` | `compatibility.json` 的 mcp-client 版本豁免 | 两版本相等，或键存在且含运行时版本=PASS；缺键/值不含/版本来源不可靠=WARN；**永不 FAIL** | 重跑 `install.ps1`（别加 `-SkipCompatibility`）后重启 |
 | 13 | `skills` | 8 个技能目录在场，且 `SKILL.md` 的 `name:` 等于目录名 | 8/8=PASS；staging 不存在=WARN；缺目录/`name` 不符=FAIL | 重装 bundle，或把 `name:` 改成目录名 |
 

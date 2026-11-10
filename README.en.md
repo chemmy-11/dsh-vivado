@@ -94,7 +94,7 @@ no configuration, no MCP tools. Install **either** this **or** the full kit:
 
 ```sh
 # preferred: the prebuilt tarball from the release (no local HTTPS git needed)
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.2/dsh-vivado-preset-0.2.2.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.3/dsh-vivado-preset-0.2.3.tgz
 # alternative: the GitHub subdirectory URL (pnpm resolves it over HTTPS git; environments that
 # can only reach github.com over SSH fail here -- use the tarball above)
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
@@ -172,7 +172,7 @@ dsh-vivado/
   tools/                    patch renderer, template generator, skills-manifest generator
   templates/                preset template, shipped-22-rows audit copy, persona/ tier fragments
   skills/                   8 skills + MANIFEST.json + provenance notes
-  patches/vivado-mcp/       10 optional patches + the Apache-2.0 text + apply/verify notes
+  patches/vivado-mcp/       11 optional patches + the Apache-2.0 text + apply/verify notes
   docs/                     install, doctor, version matrix, architecture, troubleshooting, licensing
   NOTICE  LICENSE  README.md  README.en.md
 ```
@@ -205,7 +205,7 @@ shipped with the package keeps its own license:
   `plugin-bundled/skills/`; the files we changed are listed one by one in `NOTICE` §1.3;
 - **22 preset plugin rows taken from DeepSeek Harness**: MIT (© 2026 DeepSeek);
 - **`vivado-mcp`**: a third-party project under Apache-2.0; this repository contains **none of its source**,
-  only 10 `.patch` files (the license text ships with them).
+  only 11 `.patch` files (the license text ships with them).
 
 MIT covers only the parts we wrote; the third-party terms are listed in [`NOTICE` §3.0](NOTICE) and
 [`docs/licensing.md`](docs/licensing.md). This project is not affiliated with or endorsed by AMD, Xilinx

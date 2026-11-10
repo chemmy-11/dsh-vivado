@@ -1,0 +1,270 @@
+--- a/vivado_mcp/analysis/xpr_parser.py
++++ b/vivado_mcp/analysis/xpr_parser.py
+@@ -28,6 +28,8 @@
+ import os
+ import posixpath
+ import xml.etree.ElementTree as ET
++
++from vivado_mcp.analysis.path_hints import missing_file_message
+ from dataclasses import asdict, dataclass, field
+ 
+ # 文件大小上限（10MB）
+@@ -278,7 +280,7 @@
+         ValueError: 文件格式错误、超过大小限制或非合法 Vivado 工程文件。
+     """
+     if not os.path.isfile(file_path):
+-        raise FileNotFoundError(f"XPR 文件不存在: {file_path}")
++        raise FileNotFoundError(missing_file_message(file_path, "XPR 文件", "*.xpr"))
+ 
+     file_size = os.path.getsize(file_path)
+     if file_size > _MAX_FILE_SIZE:
+--- a/vivado_mcp/analysis/bit_header_parser.py
++++ b/vivado_mcp/analysis/bit_header_parser.py
+@@ -24,6 +24,8 @@
+ import hashlib
+ import os
+ from dataclasses import dataclass
++
++from vivado_mcp.analysis.path_hints import missing_file_message
+ 
+ # 文件大小上限（10MB），防止误传超大文件耗尽内存
+ _MAX_FILE_SIZE = 10 * 1024 * 1024
+@@ -105,7 +107,7 @@
+         ValueError: 文件过大、过短或不是合法的 .bit（缺少 0F F0 前导）。
+     """
+     if not os.path.isfile(file_path):
+-        raise FileNotFoundError(f".bit 文件不存在: {file_path}")
++        raise FileNotFoundError(missing_file_message(file_path, ".bit 文件", "*.bit"))
+ 
+     file_size = os.path.getsize(file_path)
+     if file_size > _MAX_FILE_SIZE:
+--- a/vivado_mcp/analysis/ltx_parser.py
++++ b/vivado_mcp/analysis/ltx_parser.py
+@@ -29,6 +29,8 @@
+ import json
+ import os
+ from dataclasses import dataclass
++
++from vivado_mcp.analysis.path_hints import missing_file_message
+ 
+ # 文件大小上限（10MB）
+ _MAX_FILE_SIZE = 10 * 1024 * 1024
+@@ -200,7 +202,7 @@
+         ValueError: 文件过大、为旧版 XML 格式、或 JSON 结构非法。
+     """
+     if not os.path.isfile(file_path):
+-        raise FileNotFoundError(f"LTX 文件不存在: {file_path}")
++        raise FileNotFoundError(missing_file_message(file_path, "LTX 文件", "*.ltx"))
+ 
+     file_size = os.path.getsize(file_path)
+     if file_size > _MAX_FILE_SIZE:
+--- a/vivado_mcp/analysis/xci_parser.py
++++ b/vivado_mcp/analysis/xci_parser.py
+@@ -16,6 +16,8 @@
+ import os
+ import xml.etree.ElementTree as ET
+ from dataclasses import dataclass, field
++
++from vivado_mcp.analysis.path_hints import missing_file_message
+ 
+ # SPIRIT 命名空间
+ _NS = {"spirit": "http://www.spiritconsortium.org/XMLSchema/SPIRIT/1685-2009"}
+@@ -109,7 +111,7 @@
+         ValueError: 文件格式错误或超过大小限制。
+     """
+     if not os.path.isfile(file_path):
+-        raise FileNotFoundError(f"XCI 文件不存在: {file_path}")
++        raise FileNotFoundError(missing_file_message(file_path, "XCI 文件", "*.xci"))
+ 
+     file_size = os.path.getsize(file_path)
+     if file_size > _MAX_FILE_SIZE:
+--- a/vivado_mcp/analysis/timing_evidence.py
++++ b/vivado_mcp/analysis/timing_evidence.py
+@@ -9,6 +9,7 @@
+ from pathlib import Path
+ 
+ from vivado_mcp.analysis.timing_parser import TimingReport, summary_tokens
++from vivado_mcp.analysis.path_hints import path_hint
+ from vivado_mcp.analysis.warning_parser import parse_pre_bitstream
+ 
+ MAX_REPORT_BYTES = 16 * 1024 * 1024
+@@ -38,7 +39,7 @@
+     """限量读取 UTF-8 文本，拒绝目录、二进制及过大文件。"""
+     path = Path(filename).expanduser()
+     if not path.is_file():
+-        raise ValueError(f"文件不存在或不是普通文件: {path}")
++        raise ValueError(f"文件不存在或不是普通文件: {path}" + path_hint(str(path)))
+     with path.open("rb") as stream:
+         data = stream.read(limit + 1)
+     if len(data) > limit:
+--- a/vivado_mcp/tools/tcl_tools.py
++++ b/vivado_mcp/tools/tcl_tools.py
+@@ -35,6 +35,7 @@
+ 
+ from mcp.server.mcpserver import Context
+ 
++from vivado_mcp.analysis.path_hints import path_hint
+ from vivado_mcp.config import find_vivado
+ from vivado_mcp.server import _NO_SESSION, _require_session, _safe_execute, mcp
+ from vivado_mcp.vivado.tcl_utils import tcl_quote
+@@ -938,6 +939,7 @@
+         raise _JobError(
+             f"script_path 不存在或不是文件: {script_path!r}。"
+             "请传绝对路径（例如 D:/FPGA/scripts/run_impl.tcl），不要传 Tcl 命令文本。"
++            + path_hint(script, "*.tcl")
+         )
+ 
+     try:
+--- a/vivado_mcp/tools/diagnostic_tools.py
++++ b/vivado_mcp/tools/diagnostic_tools.py
+@@ -40,6 +40,7 @@
+     plan_fixes,
+ )
+ from vivado_mcp.analysis.xdc_linter import format_lint_report, lint_xdc_files
++from vivado_mcp.analysis.path_hints import path_hint
+ from vivado_mcp.analysis.xdc_parser import XdcConstraint, parse_xdc_file
+ from vivado_mcp.server import _NO_SESSION, _require_session, mcp
+ from vivado_mcp.tcl_scripts import (
+@@ -603,7 +604,7 @@
+         try:
+             xdc_constraints.extend(parse_xdc_file(xdc_path))
+         except (FileNotFoundError, OSError) as e:
+-            read_errors.append(f"  {xdc_path}: {e}")
++            read_errors.append(f"  {xdc_path}: {e}" + path_hint(xdc_path, "*.xdc"))
+ 
+     if not xdc_constraints:
+         msg = (
+--- /dev/null
++++ b/vivado_mcp/analysis/path_hints.py
+@@ -0,0 +1,131 @@
++"""路径猜错时的候选发现（只影响"文件不存在"的报错文本，不改变成功路径的行为）。
++
++2026-11-10 实测：组员把工程文件拼成 ``<repo>/prj/project_13/prj13.xpr``，而仓库里实际在
++``<repo>/prj/project_13/vivado/prj13.xpr``。工具只回一句 "XPR 文件不存在: ..."，模型会继续
++换路径猜，而不是先去定位真实位置。
++
++本模块只做一件事：在**精确路径不存在**时，从最近的已存在父目录向下按扩展名找候选
++（深度 <= 6、目录数 <= 2000、最多 5 个、跳过 .git/node_modules/.Xil/xsim.dir 等），
++把候选拼进异常文本；找不到时提示"先定位工程根/产物目录，不要继续猜路径"。
++找到文件时本模块不参与任何逻辑，因此成功路径的输出逐字节不变。
++"""
++
++from __future__ import annotations
++
++import fnmatch
++import os
++from pathlib import Path
++
++# 搜索上限：防止在巨大的仓库/盘符根上做无边界的全盘扫描
++_MAX_DEPTH = 6
++_MAX_DIRS = 2000
++_MAX_HITS = 5
++
++_SKIP_DIRS = {
++    ".git", ".svn", ".hg", "node_modules", "__pycache__", ".venv", "venv",
++    ".Xil", "xsim.dir", "site-packages", ".idea", ".vscode",
++}
++
++
++def _norm(path: str) -> str:
++    raw = (path or "").strip().strip('"').strip("'")
++    if not raw:
++        return ""
++    return os.path.normpath(os.path.expanduser(raw))
++
++
++def pattern_for(path: str, pattern: str | None = None) -> str:
++    """候选匹配模式：显式给就用显式的，否则按目标文件的扩展名推导。"""
++    if pattern:
++        return pattern
++    suffix = Path(path).suffix
++    return "*" + suffix if suffix else "*"
++
++
++def _nearest_existing_dir(target: Path) -> Path | None:
++    cur = target if target.is_dir() else target.parent
++    while cur and not cur.exists():
++        parent = cur.parent
++        if parent == cur:
++            return None
++        cur = parent
++    if not cur or not cur.is_dir():
++        return None
++    # 盘符根 / 文件系统根不做递归搜索（会变成全盘扫描，且噪声远大于收益）
++    if len(cur.parts) <= 1:
++        return None
++    return cur
++
++
++def _collect(root: Path, pat: str) -> list[str]:
++    hits: list[str] = []
++    seen_dirs = 0
++    root_depth = len(root.parts)
++    for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
++        seen_dirs += 1
++        if seen_dirs > _MAX_DIRS:
++            break
++        depth = len(Path(dirpath).parts) - root_depth
++        if depth >= _MAX_DEPTH:
++            dirnames[:] = []
++        else:
++            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
++        for name in filenames:
++            if fnmatch.fnmatch(name.lower(), pat.lower()):
++                hits.append(os.path.join(dirpath, name))
++                if len(hits) >= _MAX_HITS * 20:
++                    return hits
++    return hits
++
++
++def suggest_paths(path: str, pattern: str | None = None, max_hits: int = _MAX_HITS) -> list[str]:
++    """路径不存在时返回附近候选（最多 ``max_hits`` 个）；任何异常都退化成空列表。"""
++    raw = _norm(path)
++    if not raw:
++        return []
++    target = Path(raw)
++    try:
++        if target.is_file():
++            return []
++        if target.is_dir():
++            root = target
++        else:
++            root = _nearest_existing_dir(target)
++        if root is None:
++            return []
++        pat = pattern_for(raw, pattern)
++        hits = _collect(root, pat)
++    except OSError:
++        return []
++    wanted = target.name.lower()
++    hits.sort(key=lambda h: (os.path.basename(h).lower() != wanted, len(h), h.lower()))
++    unique: list[str] = []
++    seen: set[str] = set()
++    for hit in hits:
++        key = os.path.normcase(hit)
++        if key in seen:
++            continue
++        seen.add(key)
++        unique.append(hit)
++        if len(unique) >= max_hits:
++            break
++    return unique
++
++
++def path_hint(path: str, pattern: str | None = None) -> str:
++    """给"文件不存在"的报错追加一行候选提示（无候选时给定位建议）。"""
++    raw = _norm(path)
++    pat = pattern_for(raw, pattern)
++    candidates = suggest_paths(raw, pattern)
++    if candidates:
++        shown = "；".join(candidates)
++        return f"；附近找到候选（请用真实路径重试）: {shown}"
++    return (
++        f"；附近未找到匹配 {pat} 的文件：先确认工程根/产物目录"
++        "（可用 kit 的 tools/find-project.ps1 或 glob 定位），不要继续猜路径"
++    )
++
++
++def missing_file_message(path: str, label: str, pattern: str | None = None) -> str:
++    """``<label> 不存在: <path>`` + 候选提示，供解析器抛 FileNotFoundError 用。"""
++    return f"{label}不存在: {path}" + path_hint(path, pattern)

@@ -423,7 +423,7 @@ def group_static() -> bool:
     # ASCII-only: Windows PowerShell 5.1 reads a .ps1 as ANSI, and the .tcl helper is sourced by
     # Vivado's Tcl 8.5 interpreter.
     assets = ["tools/vivado-probe.ps1", "tools/vivado-run.ps1", "tools/tcl-check.ps1",
-              "templates/build-markers.tcl"]
+              "tools/find-project.ps1", "templates/build-markers.tcl"]
     asset_problems = []
     for rel in assets:
         path = KIT / rel
@@ -512,7 +512,8 @@ def group_install() -> bool:
                  "{0} SKILL.md".format(len(skill_docs)))
 
     dump = dump_config()
-    ok &= record("dump-config: kit bundle layer present", "# == " + KIT_PACKAGE in dump)
+    ok &= record("dump-config: kit bundle layer present",
+                  bool(re.search(r"(?m)^#\s*==\s*" + re.escape(KIT_PACKAGE) + r"[ \t]*$", dump)))
     ok &= record("dump-config: preset-vivado row", "- id: preset-vivado" in dump)
     ok &= record("dump-config: persona discipline text",
                  "GLOBALLY SERIAL" in dump and "file:line" in dump)
@@ -586,7 +587,10 @@ def group_uninstall() -> bool:
     rc, txt = ps(KIT / "uninstall.ps1", *args, env_extra=env)
     ok = record("uninstall.ps1 exit 0", rc == 0, "" if rc == 0 else tail(txt, 14))
     pkg_text = (prof / "package.json").read_text(encoding="utf-8")
-    ok &= record("dependency row removed", KIT_PACKAGE not in pkg_text)
+    pkg_after = json.loads(pkg_text)
+    deps_after = pkg_after.get("dependencies") or {}
+    ok &= record("dependency row removed", KIT_PACKAGE not in deps_after,
+                  "still in dependencies: " + ", ".join(deps_after)[:120])
     ok &= record("staging dir removed", not stage.exists(), str(stage))
     link = prof / "node_modules" / KIT_PACKAGE
     ok &= record("node_modules link removed", not link.exists() and not link.is_symlink(), str(link))

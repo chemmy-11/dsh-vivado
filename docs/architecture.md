@@ -143,11 +143,11 @@ DSH 的 `skill-filesystem` 按 rank 从小到大发现技能根（来源：DSH �
 5. **崩溃兜底**：`license`、`mcp-patches` 在 `$checkList` 里是 `Soft=$true`，检查函数自身抛异常时降级成 WARN；其余项崩溃会变成 FAIL（`doctor.ps1:1290-1305`）。
 6. **输出契约**：`-Json` 是**单行** JSON 数组、字段恒为 `{id,title,status,detail,fix}`（`doctor.ps1:1330-1332`；单行是刻意的：PS 5.1 按行管道化子进程输出，多行 JSON 会让 `| ConvertFrom-Json` 报错）；退出码 `0` = 无 FAIL，`1` = 至少一项 FAIL（`:1351`），WARN 不改退出码。
 
-## 8. 为什么 10 个 vivado-mcp 补丁默认不自动打
+## 8. 为什么 11 个 vivado-mcp 补丁默认不自动打
 
 - 本包**只带 `.patch`，不带改后的源码**（`patches/vivado-mcp/`、`NOTICE` §2.1）。两个理由：Apache-2.0 §4(b) 要求被修改的文件带"已修改"提示，把改动留在使用者显式应用的补丁里，比静默发一份改过的源码更符合该义务；以及"PR 优先、不做私有分支"（`patches/vivado-mcp/README.md` §6）。
 - 不打补丁的代价可量化：`xdc_lint` 默认 `max_items=20`、`get_cdc_report` 默认 `max_details=100`（`NOTICE` §2.1 表），大工程会静默少给明细；`run_tcl` / `safe_tcl` 也没有 `max_lines` / `save_full_to`。
-- doctor 判"补丁在不在"用的是**内容探针**（11 组 `Select-String -SimpleMatch` 源码标记），不是 mtime、也不是 `.bak` 文件：补丁重打后 mtime 毫无意义，而 `.bak-mcp-*` 备份反而会让"没打补丁"看起来像"打了"（`doctor.ps1:1035`、[doctor 详解](doctor-checks.md) §11）。
+- doctor 判"补丁在不在"用的是**内容探针**（12 组 `Select-String -SimpleMatch` 源码标记），不是 mtime、也不是 `.bak` 文件：补丁重打后 mtime 毫无意义，而 `.bak-mcp-*` 备份反而会让"没打补丁"看起来像"打了"（`doctor.ps1:1035`、[doctor 详解](doctor-checks.md) §11）。
 
 ## 8.5 显示元数据：图标与标题（插件列表里长什么样）
 
