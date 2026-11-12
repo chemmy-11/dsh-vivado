@@ -94,11 +94,13 @@ powershell -NoProfile -File uninstall.ps1 -Profile desktop -Purge
 
 配置有两个入口，改的是**同一份** profile 配置：
 
-1. **GUI 卡片（推荐）**：`设置 → 插件 → 已安装的插件 → dsh-vivado-team-link → 行 team-link → 配置`。
-   面板能改角色 / 机器名 / A2A·MCP 的 host 与 port / 对端名字与地址 / 回退仓库与标签与轮询间隔 / 日志目录 / 授权根。
-   **它不收 token 值**（原因见 §4.5），只显示 token 的引用名与文件路径。
-2. **profile 配置项**：`cordis.patch.yml` 的 `config:` 块。卡片保存的也是这里 —— 宿主会把改动的字段写成一条
-   `- id: team-link` 的覆盖项，所以「GUI 改」与「手改 YAML」不会打架。
+1. **设置里的一级分区（主入口）**：`设置 → PC 协作` —— 和「通用设置」「模型」「内置插件」**同级**，
+   一次点击就到，不藏在插件页里。面板能改角色 / 机器名 / A2A·MCP 的 host 与 port / 对端名字与地址 /
+   回退仓库与标签与轮询间隔 / 日志目录 / 授权根。**它不收 token 值**（原因见 §4.5），只显示 token 的引用名与文件路径。
+2. **插件页里的行配置页（第二入口）**：`设置 → 插件 → 已安装的插件 → dsh-vivado-team-link → 行 team-link → 配置`。
+   同一张表单，走的是宿主递 `form` 的 keyed slot。
+3. **profile 配置项**（等价底稿）：`cordis.patch.yml` 的 `config:` 块。面板保存的也是这里 —— 宿主会把改动的字段
+   写成一条 `- id: team-link` 的覆盖项，所以「GUI 改」与「手改 YAML」不会打架。
 
 GUI 面板**不是宿主自动生成的**：DSH 0.2.2-rc.1 没有「按 Config Schema 自动渲染原生表单」这层 UI，面板只能由插件
 自己占一个 keyed slot。四条证据（均已核对）：
@@ -255,7 +257,7 @@ team_link_setup { action: "clear-token", token: "peer-mcp" }
 
 非密参数走配置项、密文走凭据存储，是本版本唯一能落地的组合：宿主没有自动表单（§4.1 的四条证据），schemastery 3.19.0 也没有 secret 类型；硬把明文 token 塞进 `config:`，等于同时污染 profile 配置、`*.bak-*` 备份和卸载回滚链。`team_link_setup` 对标 `task_board_github_setup`：值只进凭据存储，工具自己绝不返回值。
 
-### 4.7 GUI 卡片：怎么做的、踩过什么坑
+### 4.7 GUI：一级分区 + 行配置页，怎么做的、踩过什么坑
 
 `lib/client.js` 是一个**手写的客户端 bundle**（不引入构建链）：
 
@@ -265,10 +267,21 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const React = require('react')            // 平台冻结模块表里的 react
     // …注册卡片…
-    return { apply, inject: ['slots'] }
+    return { apply, inject: ['slots', 'configForms'] }
   },
 })
 ```
+
+**两个入口、一份实现**：
+
+- **一级分区** `settings.section`：`{ name, id: 'team-link', order: 20, label: 'PC 协作' }`。
+  order 与「通用设置」0 /「模型」10 /「内置插件」15 同一序列，所以它就是一个**一级导航项**。
+  一级分区**拿不到**宿主递来的表单对象，必须自己 `ctx.configForms.get(<entryId>)` 取 ——
+  官方页面（模型 / 网页搜索）也是这么干的。entryId 就是本行的 id `team-link`；为稳妥起见
+  按 `team-link` → `<包名>#team-link` → `include:team-link` → `<包名>` 依次在 `configForms.describe()`
+  的 namespaces 里找第一个命中的。
+- **行配置页** `plugins.row.config`（键 `<包名>#<行 id>`）：宿主直接把 `form` 当 prop 递进来。
+  两个入口渲染的是同一个 `TeamLinkForm`，只是「怎么拿到 form」不同。
 
 要点（每条都是实测结论，不是推测）：
 
@@ -356,7 +369,7 @@ powershell -NoProfile -File tools\collab_status.ps1          # 通道断开时�
 
 ## 10. 版本
 
-0.3.0 —— **GUI 版**：新增 lib/client.js（手写客户端 bundle，零构建），把配置卡片注册进 keyed slot plugins.row.config（键 dsh-vivado-team-link#team-link）；Config 里除 allback.mode 外全部字段标 .volatile()（宿主只 serve volatile 字段），pply() 订阅 loader/volatile-update 在卡片保存后立即重物化 config.json。面板能改角色/地址/端口/对端/回退/日志目录/授权根，**不收也不显示 token 值**。已在独立测试 profile 上实测：面板渲染、保存、profile patch 落盘、config.json 重物化、roots 不丢。
+0.3.0 —— **GUI 版**：新增 `lib/client.js`（手写客户端 bundle，零构建）。面板有两个入口、同一张表单：**设置里的一级分区**（`settings.section`，id `team-link`、order 20、label「PC 协作」，与「通用设置」「模型」「内置插件」同级，一次点击就到）与**插件页的行配置页**（keyed slot `plugins.row.config`，键 `dsh-vivado-team-link#team-link`）；一级分区拿不到宿主递来的 form，自己用 `ctx.configForms` 按 entry id 取。Config 里除 `fallback.mode` 外全部字段标 `.volatile()`（宿主只 serve volatile 字段），`apply()` 订阅 `loader/volatile-update` 在面板保存后立即重物化 `config.json`。面板能改角色/地址/端口/对端/回退/日志目录/授权根，**不收也不显示 token 值**。实测（独立 profile 的第二个宿主）：一级导航项出现、页面渲染、保存、profile patch 落盘、`config.json` 重物化、roots 不丢。
 
 0.2.0 —— **宿主半边落地版**：`cordis.patch.yml` 从一行变两行（`team-link` + `mcp-team-link`）、配置项进 profile、token 值走凭据存储、宿主工具 `team_link_setup` 上线；GUI 配置面板仍未做（§4.1 / §4.7）。
 版本号以 `package.json` / `plugin.json` 为准；清单字段见 `plugin.json` 的 `provides` / `writes` / `rollback`。

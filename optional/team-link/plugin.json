@@ -1,120 +1,131 @@
 {
-  "id": "dsh-vivado-team-link",
-  "name": "dsh-vivado-team-link",
-  "version": "0.3.0",
-  "kind": "optional-bundle-fragment",
-  "parentBundle": "dsh-vivado@0.2.3",
-  "installMode": "optional",
-  "entersPresetByDefault": false,
-  "summary": "PC1<->PC2 协作层（A2A + MCP 双通道 + issue 回退），PC2 为同等权限组员。",
-  "requires": {
-    "node": ">=20",
-    "dsh": ">=0.2.2-rc.1",
-    "powershell": ">=5.1"
-  },
-  "hostPlugin": {
-    "entry": "lib/index.js",
-    "exports": [
-      "name",
-      "Config",
-      "apply"
-    ],
-    "materializes": "state/config.json",
-    "tools": [
-      "team_link_setup"
-    ],
-    "credentialRefs": [
-      "TEAM_LINK_A2A_TOKEN",
-      "TEAM_LINK_MCP_TOKEN",
-      "TEAM_LINK_PEER_A2A_TOKEN",
-      "TEAM_LINK_PEER_MCP_TOKEN"
-    ]
-  },
-  "clientPlugin": {
-    "entry": "lib/client.js",
-    "declaration": "dsh.client.platform=web + exports[\"./client\"]",
-    "bundleFormat": "window.__ModuleLoader__.load({ id, factory(require) }) —— 手写、无构建；只 require 平台冻结模块表里的 react",
-    "configFormSlot": "plugins.row.config",
-    "configFormSlotKey": "dsh-vivado-team-link#team-link",
-    "note": "DSH 0.2.2-rc.1 没有「按 Config Schema 自动渲染原生表单」的通用 UI（配置页是 keyed slot，只有插件自带的客户端卡片能占位），所以本插件自带这张卡片。面板只改非密字段；token 值不进面板、不进配置，写入走宿主工具 team_link_setup。卡片刻意不读 remote.credentials（非必需服务，未 inject 就取会抛错并崩掉整张卡片）。",
-    "neverLogsSecret": true
-  },
-  "provides": {
-    "mcpServers": [
-      {
-        "serverName": "team_link",
-        "transports": [
-          "stdio",
-          "http"
-        ],
-        "tools": [
-          "list_roots",
-          "read_file",
-          "write_file",
-          "sha256_file",
-          "collab_status"
-        ]
-      }
-    ],
-    "skills": [
-      "prj-team-collab"
-    ],
-    "scripts": [
-      "tools/collab_status.ps1",
-      "tools/pc1_pc2_ping.ps1",
-      "tools/evidence_pull.ps1",
-      "tools/apply-selftest.mjs"
-    ],
-    "templates": [
-      "PC2_上线清单.md",
-      "AgentCard.template.json",
-      "daily-audit-issue.md"
-    ]
-  },
-  "ports": {
-    "a2a": 7310,
-    "mcp": 18790
-  },
-  "network": {
-    "forbiddenCidrs": [
-      "192.168.1.0/24"
-    ],
-    "forbiddenReason": "两板各自私有链路且同 IP/同 MAC，PC<->PC 走此网段会命中错误对端",
-    "allowedTransports": [
-      "WLAN",
-      "第二网卡",
-      "Tailscale"
-    ]
-  },
-  "auth": {
-    "scheme": "bearer",
-    "tokenFiles": [
-      "state/a2a.token",
-      "state/mcp.token",
-      "state/peer-a2a.token",
-      "state/peer-mcp.token"
-    ],
-    "tokenSource": "DSH 凭据存储（~/.dsh/.credentials.yaml 的 refs 段），由 apply() 单向下沉为 token 文件；配置里只有路径与引用名，没有密文",
-    "agentCardIsPublic": true
-  },
-  "writes": {
-    "ownDir": true,
-    "outsideOwnDir": [
-      "<DshHome>/profiles/<profile>/package.json (dsh.profile.bundles)",
-      "<DshHome>/profiles/<profile>/cordis.patch.yml (设置卡片保存时的行级覆盖)",
-      "<DshHome>/skills/prj-team-collab/",
-      "<DshHome>/.credentials.yaml (refs 段，仅当用 team_link_setup 写 token 时)"
-    ],
-    "neverTouches": [
-      "dsh-vivado/cordis.patch.yml",
-      "dsh-vivado/install.ps1",
-      "dsh-vivado/packages/**",
-      "dsh-vivado/patches/**",
-      "dsh-vivado/skills/**",
-      "dsh-vivado/tools/**",
-      "dsh-vivado/templates/**",
-      "dsh-vivado/config.yml"
-    ]
-  },
-  "rollback": "uninstall.ps1 还原 profile package.json 备份 + 删除 skill 副本 + 摘除 schemastery shim junction + -Purge 清除渲染产物；前后两次 kit 目录 SHA256 比对必须一致"
+    "id":  "dsh-vivado-team-link",
+    "name":  "dsh-vivado-team-link",
+    "version":  "0.3.0",
+    "kind":  "optional-bundle-fragment",
+    "parentBundle":  "dsh-vivado@0.2.3",
+    "installMode":  "optional",
+    "entersPresetByDefault":  false,
+    "summary":  "PC1\u003c-\u003ePC2 协作层（A2A + MCP 双通道 + issue 回退），PC2 为同等权限组员。",
+    "requires":  {
+                     "node":  "\u003e=20",
+                     "dsh":  "\u003e=0.2.2-rc.1",
+                     "powershell":  "\u003e=5.1"
+                 },
+    "hostPlugin":  {
+                       "entry":  "lib/index.js",
+                       "exports":  [
+                                       "name",
+                                       "Config",
+                                       "apply"
+                                   ],
+                       "materializes":  "state/config.json",
+                       "tools":  [
+                                     "team_link_setup"
+                                 ],
+                       "credentialRefs":  [
+                                              "TEAM_LINK_A2A_TOKEN",
+                                              "TEAM_LINK_MCP_TOKEN",
+                                              "TEAM_LINK_PEER_A2A_TOKEN",
+                                              "TEAM_LINK_PEER_MCP_TOKEN"
+                                          ]
+                   },
+    "clientPlugin":  {
+                         "entry":  "lib/client.js",
+                         "declaration":  "dsh.client.platform=web + exports[\"./client\"]",
+                         "bundleFormat":  "window.__ModuleLoader__.load({ id, factory(require) }) —— 手写、无构建；只 require 平台冻结模块表里的 react",
+                         "configFormSlot":  "plugins.row.config",
+                         "configFormSlotKey":  "dsh-vivado-team-link#team-link",
+                         "note":  "DSH 0.2.2-rc.1 没有「按 Config Schema 自动渲染原生表单」的通用 UI（配置页是 keyed slot，只有插件自带的客户端卡片能占位），所以本插件自带这张卡片。面板只改非密字段；token 值不进面板、不进配置，写入走宿主工具 team_link_setup。卡片刻意不读 remote.credentials（非必需服务，未 inject 就取会抛错并崩掉整张卡片）。",
+                         "neverLogsSecret":  true,
+                         "settingsSection":  {
+                                                 "id":  "team-link",
+                                                 "order":  20,
+                                                 "label":  "PC 协作",
+                                                 "slot":  "settings.section",
+                                                 "note":  "一级设置分区：与「通用设置」(order 0)「模型」(10)「内置插件」(15) 同级的导航项。一级分区拿不到宿主递来的 form，由 lib/client.js 自己用 ctx.configForms 按 entry id 解析（候选 team-link → dsh-vivado-team-link#team-link → include:team-link → dsh-vivado-team-link）。"
+                                             },
+                         "inject":  [
+                                        "slots",
+                                        "configForms"
+                                    ]
+                     },
+    "provides":  {
+                     "mcpServers":  [
+                                        {
+                                            "serverName":  "team_link",
+                                            "transports":  [
+                                                               "stdio",
+                                                               "http"
+                                                           ],
+                                            "tools":  [
+                                                          "list_roots",
+                                                          "read_file",
+                                                          "write_file",
+                                                          "sha256_file",
+                                                          "collab_status"
+                                                      ]
+                                        }
+                                    ],
+                     "skills":  [
+                                    "prj-team-collab"
+                                ],
+                     "scripts":  [
+                                     "tools/collab_status.ps1",
+                                     "tools/pc1_pc2_ping.ps1",
+                                     "tools/evidence_pull.ps1",
+                                     "tools/apply-selftest.mjs"
+                                 ],
+                     "templates":  [
+                                       "PC2_上线清单.md",
+                                       "AgentCard.template.json",
+                                       "daily-audit-issue.md"
+                                   ]
+                 },
+    "ports":  {
+                  "a2a":  7310,
+                  "mcp":  18790
+              },
+    "network":  {
+                    "forbiddenCidrs":  [
+                                           "192.168.1.0/24"
+                                       ],
+                    "forbiddenReason":  "两板各自私有链路且同 IP/同 MAC，PC\u003c-\u003ePC 走此网段会命中错误对端",
+                    "allowedTransports":  [
+                                              "WLAN",
+                                              "第二网卡",
+                                              "Tailscale"
+                                          ]
+                },
+    "auth":  {
+                 "scheme":  "bearer",
+                 "tokenFiles":  [
+                                    "state/a2a.token",
+                                    "state/mcp.token",
+                                    "state/peer-a2a.token",
+                                    "state/peer-mcp.token"
+                                ],
+                 "tokenSource":  "DSH 凭据存储（~/.dsh/.credentials.yaml 的 refs 段），由 apply() 单向下沉为 token 文件；配置里只有路径与引用名，没有密文",
+                 "agentCardIsPublic":  true
+             },
+    "writes":  {
+                   "ownDir":  true,
+                   "outsideOwnDir":  [
+                                         "\u003cDshHome\u003e/profiles/\u003cprofile\u003e/package.json (dsh.profile.bundles)",
+                                         "\u003cDshHome\u003e/profiles/\u003cprofile\u003e/cordis.patch.yml (设置卡片保存时的行级覆盖)",
+                                         "\u003cDshHome\u003e/skills/prj-team-collab/",
+                                         "\u003cDshHome\u003e/.credentials.yaml (refs 段，仅当用 team_link_setup 写 token 时)"
+                                     ],
+                   "neverTouches":  [
+                                        "dsh-vivado/cordis.patch.yml",
+                                        "dsh-vivado/install.ps1",
+                                        "dsh-vivado/packages/**",
+                                        "dsh-vivado/patches/**",
+                                        "dsh-vivado/skills/**",
+                                        "dsh-vivado/tools/**",
+                                        "dsh-vivado/templates/**",
+                                        "dsh-vivado/config.yml"
+                                    ]
+               },
+    "rollback":  "uninstall.ps1 还原 profile package.json 备份 + 删除 skill 副本 + 摘除 schemastery shim junction + -Purge 清除渲染产物；前后两次 kit 目录 SHA256 比对必须一致"
 }

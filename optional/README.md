@@ -13,8 +13,10 @@
 |---|---|---|---|
 | [`team-link/`](team-link/README.md) | `dsh-vivado-team-link` | PC1↔PC2 协作层：A2A（7310）+ MCP（18790/stdio）+ 协作 issue 回退；PC2 是同等权限组员，靠口令+证据+审计约束 | Node ≥ 20、PowerShell ≥ 5.1、DSH ≥ 0.2.2-rc.1 |
 
-> `team-link` 有 **GUI 配置面板**：装好后重启宿主，在 `设置 → 插件 → 已安装的插件 → dsh-vivado-team-link → 行 team-link → 配置`
-> 里改角色 / 地址 / 端口 / 对端 / 回退 / 授权根。token **值**不在面板里（面板只显示引用名与文件路径），写入用宿主工具 `team_link_setup`。
+> `team-link` 有 **GUI 配置面板**，是**设置里的一级分区**：装好后重启宿主，`设置 → PC 协作`
+> （与「通用设置」「模型」「内置插件」同级，一次点击就到）里改角色 / 地址 / 端口 / 对端 / 回退 / 授权根。
+> 第二入口在 `设置 → 插件 → 已安装的插件 → dsh-vivado-team-link → 行 team-link → 配置`（同一张表单）。
+> token **值**不在面板里（面板只显示引用名与文件路径），写入用宿主工具 `team_link_setup`。
 
 ## 装一个
 

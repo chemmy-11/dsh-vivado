@@ -16,6 +16,14 @@
  * `require` 只能解析平台模块表里的请求（react / react-dom / @deepseek-ai/dsh-client-ui-*），
  * 基座之外的请求要写进 package.json 的 `dsh.client.external`。本文件只用 `react`。
  *
+ * ## 两个入口（同一份 profile 配置，改哪个都一样）
+ *
+ * 1. **设置里的一级分区**（默认入口，和「通用设置」「模型」同级）：
+ *    `settings.section` slot，`id: team-link`、`order: 20`、`label: 'PC 协作（team-link）'`。
+ *    一级分区拿不到宿主递来的表单对象，所以自己用 `ctx.configForms` 按命名空间取（见 TeamLinkSection）。
+ * 2. **插件页里的行配置页**（第二入口）：keyed slot `plugins.row.config`，键 `<包名>#<行 id>`，
+ *    宿主会把 `form` 作为 prop 递进来（见 TeamLinkRowConfig）。
+ *
  * ## 卡片拿到的 props
  *
  * 宿主页面按 slot 分发：`{ view, form }`，另有 `t`（仅当注册时声明了 `locale`）。
@@ -46,8 +54,17 @@ window.__ModuleLoader__.load({
     const ROW_ID = 'team-link'
     /** keyed slot 的键：`<包名>#<行 id>`。 */
     const SLOT_KEYS = ['dsh-vivado-team-link#' + ROW_ID]
-    /** 注册后从宿主拿 `form` 用的服务名（Cordis 服务，不是模块 import）。 */
-    const inject = ['slots']
+    /** 设置里的一级分区 id（导航项就靠它，与「通用设置」「模型」同级）。 */
+    const SECTION_ID = 'team-link'
+    /** 本行配置在 settings 镜像里的命名空间候选（按可能性排序）。 */
+    const NAMESPACE_CANDIDATES = [ROW_ID, 'dsh-vivado-team-link#' + ROW_ID, 'include:' + ROW_ID, 'dsh-vivado-team-link']
+    /**
+     * 需要的服务：
+     * - `slots`：注册设置分区 / 行内配置页；
+     * - `configForms`：自己取本行的配置表单（一级分区拿不到宿主递来的 `form` prop，必须自己按
+     *   entry id 取，见 §"设置分区的取表方式"）。
+     */
+    const inject = ['slots', 'configForms']
 
     // -----------------------------------------------------------------------
     //  极小工具
@@ -139,6 +156,7 @@ window.__ModuleLoader__.load({
       hint: { fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)', margin: '4px 0 0 0' },
       err: { fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-state-danger, #c0392b)', margin: '4px 0 0 0' },
       sectionTitle: { fontSize: '13px', fontWeight: 600, margin: '2px 0 0 0' },
+      intro: { fontSize: '13px', lineHeight: '20px', color: 'var(--dsw-alias-label-tertiary)', margin: 0 },
       box: {
         border: '1px solid var(--dsw-alias-border-l2)', borderRadius: '8px', padding: '10px 12px',
         display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', lineHeight: '18px',
@@ -195,18 +213,23 @@ window.__ModuleLoader__.load({
     }
 
     // -----------------------------------------------------------------------
-    //  卡片
+    //  表单主体（两种入口共用：设置里的一级分区 / 插件页里的行配置页）
     // -----------------------------------------------------------------------
 
     /**
-     * 渲染配置卡片。
-     * @param {{ view?: string, form?: any, ctx?: any }} props - 宿主注入的 slot props（ctx 由 apply 闭包补上）。
+     * 渲染配置表单本体。
+     *
+     * 两种入口的差别只在"怎么拿到 `form`"：
+     * - 一级设置分区：拿不到宿主递来的 props，自己用 `configForms` 按 entry id 取（见 TeamLinkSection）；
+     * - 插件页的行配置页：宿主直接把 `form` 递进来（见 TeamLinkRowConfig）。
+     *
+     * @param {{ view?: string, form?: any, page?: boolean }} props - `form` 是 `{ state, mutate }`。
      * @returns {unknown} React 节点或字符串。
      */
-    function TeamLinkConfig(props) {
+    function TeamLinkForm(props) {
       const view = props.view
       const form = props.form
-      const ctx = props.ctx
+      const page = props.page === true
 
       if (view === 'summary') return 'PC1↔PC2 协作层：通道 / 对端 / 授权根 / token 引用（值不在配置里）'
 
@@ -322,7 +345,16 @@ window.__ModuleLoader__.load({
 
       const children = []
 
-      children.push(h('p', { key: 'title', style: S.sectionTitle }, 'PC1↔PC2 协作层（team-link）'))
+      // 一级设置分区当页面用时，标题跟「通用设置 / 模型」一样由页面自己给（分区本身只占导航项）。
+      if (page) {
+        children.push(h('h2', {
+          key: 'page-title',
+          style: { margin: 0, fontSize: '18px', fontWeight: 600, lineHeight: '26px' },
+        }, 'PC 协作（team-link）'))
+        children.push(h('p', { key: 'page-intro', style: S.intro }, 'PC1↔PC2 两机协作层：A2A(7310) / MCP(18790) 双通道，断了退回 GitHub issue 轮询。'))
+      }
+      // 一级分区页面已经有自己的大标题，就不再重复一遍小节标题。
+      if (!page) children.push(h('p', { key: 'title', style: S.sectionTitle }, 'PC1↔PC2 协作层（team-link）'))
       children.push(h('p', { key: 'intro', style: S.hint },
         '这里的改动写进 profile 配置，并由宿主插件物化成 state/config.json。',
         'token 的**值**不在这里：配置只保存文件路径与凭据引用名，值请用宿主工具 team_link_setup 写入 DSH 凭据存储。'))
@@ -414,29 +446,151 @@ window.__ModuleLoader__.load({
       return h('section', { style: S.root, 'data-dsh-plugin': 'dsh-vivado-team-link' }, children)
     }
 
+    // -----------------------------------------------------------------------
+    //  入口 1：设置里的一级分区（和「通用设置」「模型」同级）
+    // -----------------------------------------------------------------------
+
     /**
-     * 注册卡片到「设置 → 插件 → 本行 → 配置」。
+     * 把 `configForms` 的 ConfigForm（`getSnapshot/subscribe/mutate`）适配成表单主体要的 `{ state, mutate }`。
+     *
+     * 为什么一级分区要自己取表：宿主只对 `plugins.row.config` 这类 **keyed slot** 递 `form` prop；
+     * 一级分区（`settings.section`）拿到的 props 只有 `t` 之类，没有任何表单对象。
+     * 官方页面（模型/网页搜索）都是走 `ctx.configForms` 自己取。
+     *
+     * @param {any} configForms - 客户端配置表单服务（`ctx.configForms`）。
+     * @param {string} entryId - 本行在 settings 镜像里的命名空间 id。
+     * @returns {{ state: any, mutate: (ops: any[], revision: any) => Promise<boolean> } | undefined} 适配后的表单。
+     */
+    function useConfigForm(configForms, entryId) {
+      const [snapshot, setSnapshot] = React.useState(undefined)
+      const [api, setApi] = React.useState(undefined)
+
+      React.useEffect(() => {
+        setApi(undefined)
+        setSnapshot(undefined)
+        if (!configForms || typeof configForms.get !== 'function' || entryId === undefined) return undefined
+        let form
+        try {
+          form = configForms.get(entryId)
+        } catch {
+          // 该 id 不被本部署服务：保持未就绪，页面会渲染"暂不可用"。
+          return undefined
+        }
+        if (form === undefined || form === null) return undefined
+        setApi(form)
+        const sync = () => {
+          try { setSnapshot(form.getSnapshot()) } catch { /* 读失败当作未就绪 */ }
+        }
+        sync()
+        let off
+        try { off = form.subscribe(sync) } catch { off = undefined }
+        return () => { if (typeof off === 'function') off() }
+      }, [configForms, entryId])
+
+      if (api === undefined) return undefined
+      return {
+        state: snapshot,
+        mutate: (ops, revision) => api.mutate(ops, revision),
+      }
+    }
+
+    /**
+     * 一级设置分区页面：自己从 settings 镜像里解析出本行的命名空间，再取表单。
+     * @param {{ configForms?: any }} props - 由 apply 闭包注入 `configForms`。
+     * @returns {unknown} React 节点。
+     */
+    function TeamLinkSection(props) {
+      const configForms = props.configForms
+
+      // 订阅 settings 镜像，找出本行被服务的命名空间。
+      const [namespaces, setNamespaces] = React.useState([])
+      React.useEffect(() => {
+        if (!configForms || typeof configForms.describe !== 'function') return undefined
+        let mirror
+        try { mirror = configForms.describe() } catch { return undefined }
+        if (mirror === undefined || mirror === null) return undefined
+        const read = () => {
+          try {
+            const view = mirror.getSnapshot() ? mirror.getSnapshot().view : undefined
+            const rows = view && Array.isArray(view.namespaces) ? view.namespaces : []
+            setNamespaces(rows.map((row) => asText(row && row.ns)).filter((ns) => ns !== ''))
+          } catch {
+            setNamespaces([])
+          }
+        }
+        read()
+        let off
+        try { off = mirror.subscribe(read) } catch { off = undefined }
+        return () => { if (typeof off === 'function') off() }
+      }, [configForms])
+
+      const entryId = React.useMemo(() => {
+        for (const candidate of NAMESPACE_CANDIDATES) {
+          if (namespaces.indexOf(candidate) >= 0) return candidate
+        }
+        return undefined
+      }, [namespaces.join(',')])
+
+      const form = useConfigForm(configForms, entryId)
+
+      if (configForms === undefined) {
+        return h('section', { style: S.root },
+          h('h2', { style: { margin: 0, fontSize: '18px', fontWeight: 600 } }, 'PC 协作（team-link）'),
+          h('p', { style: S.err }, '这个部署没有提供配置表单服务（configForms），本页无法编辑配置。配置仍可在 profile 的 cordis 补丁里改。'))
+      }
+      if (entryId === undefined) {
+        return h('section', { style: S.root },
+          h('h2', { style: { margin: 0, fontSize: '18px', fontWeight: 600 } }, 'PC 协作（team-link）'),
+          h('p', { style: S.hint }, '宿主还没有把本插件的配置行挂起来（行 id `team-link`）。',
+            '通常意味着 bundle 已注册但宿主未重启，或这一行被禁用。重启宿主后本页会自动出现表单。'))
+      }
+      return h(TeamLinkForm, { form, view: 'page', page: true })
+    }
+
+    // -----------------------------------------------------------------------
+    //  入口 2：插件页里的行配置页（第二入口，保留）
+    // -----------------------------------------------------------------------
+
+    /**
+     * 插件页 `plugins.row.config` 的占位组件：宿主会把 `form` 直接递进来。
+     * @param {{ view?: string, form?: any }} props - 宿主 slot props。
+     * @returns {unknown} React 节点或字符串。
+     */
+    function TeamLinkRowConfig(props) {
+      return h(TeamLinkForm, { form: props.form, view: props.view, page: false })
+    }
+
+    /**
+     * 注册两个入口：设置里的一级分区 + 插件页里的行配置页。
      * @param {any} ctx - 浏览器侧 Cordis 上下文。
      */
     function apply(ctx) {
       const slots = ctx && ctx.slots
       if (!slots || typeof slots.inject !== 'function') return
 
-      // 卡片**刻意不读凭据存储**：那需要 `remote.credentials` 这类非必需服务，
-      // 而实测「未 inject 就读取」会直接抛错、把整张卡片从 slot 里崩掉
-      // （`cannot get property "remote.credentials" without inject`）。为了一个"已配置/未配置"
-      // 徽章去赌整个面板是否挂载不划算 —— token 的真实状态由宿主工具
-      // team_link_setup {action:"status"} 权威回报（只报存在性，不返回值）。
-      const Card = (props) => TeamLinkConfig({ ...props, ctx })
+      // `configForms` 声明在模块出口的 inject 里；这里只做防御性读取（拿不到就渲染"不可用"而不是崩）。
+      let configForms
+      try { configForms = ctx.configForms } catch { configForms = undefined }
+
+      // —— 入口 1：设置里的一级分区。order 20 = 排在「通用设置」(0)、「模型」(10)、「插件」(15) 之后，
+      //    与它们是同一级导航项，不是塞在插件页里。label 用静态中文（分区 label 接受字符串）。——
+      slots.inject('settings.section', () => slots.register({
+        name: 'settings.section',
+        id: SECTION_ID,
+        order: 20,
+        label: 'PC 协作',
+      }, () => h(TeamLinkSection, { configForms })))
+
+      // —— 入口 2：插件页里的行配置页（保留：两个入口改的是同一份 profile 配置）。——
       slots.inject('plugins.row.config', () => {
         const disposers = []
         for (const key of SLOT_KEYS) {
           try {
-            disposers.push(slots.register({ name: 'plugins.row.config', key }, Card))
+            disposers.push(slots.register({ name: 'plugins.row.config', key }, TeamLinkRowConfig))
           } catch (error) {
             // 该行不可配置时宿主会拒绝注册：不影响其他键，但要留痕（面板不出现时靠这行排查）。
             // eslint-disable-next-line no-console
-            try { console.warn('[team-link] 注册配置卡片失败 key=' + key + ' -> ' + (error && error.message ? error.message : error)) } catch {}
+            try { console.warn('[team-link] 注册行配置页失败 key=' + key + ' -> ' + (error && error.message ? error.message : error)) } catch {}
           }
         }
         return () => { for (const dispose of disposers) dispose() }
