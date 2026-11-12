@@ -7,7 +7,7 @@
 [CmdletBinding()]
 param(
   [string]$Profile = 'desktop',
-  [string]$DshHome = 'C:\Users\15266\.dsh',
+  [string]$DshHome = (Join-Path $env:USERPROFILE '.dsh'),
   [ValidateSet('Cli','Manual','Restore')][string]$UnregisterMode = 'Cli',
   [switch]$Purge,
   [switch]$Force,
@@ -80,7 +80,18 @@ if ($UnregisterMode -eq "Restore") {
 } else {
   if ($UnregisterMode -eq "Cli") {
     $dshCmd = Get-Command dsh -ErrorAction SilentlyContinue
-    if (-not $dshCmd) { $cand = "D:\dsh\resources\runtime\cli\bin\dsh.cmd"; if (Test-Path -LiteralPath $cand) { $dshCmd = Get-Item $cand } }
+    if (-not $dshCmd) {
+    # dsh CLI 的兜底探测：从本机装的东西找，不要写死某台机器的安装盘。
+    $cliCandidates = @(
+      (Join-Path $DshHome 'dsh-runtimes\dsh-primary-runtime\cli\bin\dsh.cmd'),
+      (Join-Path $env:LOCALAPPDATA 'Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd'),
+      (Join-Path $env:ProgramFiles 'DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd'),
+      (Join-Path ${env:ProgramFiles(x86)} 'DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd')
+    )
+    foreach ($cand in $cliCandidates) {
+      if ($cand -and (Test-Path -LiteralPath $cand)) { $dshCmd = Get-Item -LiteralPath $cand; break }
+    }
+  }
     if ($dshCmd) {
       $cliPath = if ($dshCmd -is [System.Management.Automation.CommandInfo]) { $dshCmd.Source } else { $dshCmd.FullName }
       Write-Info ("pnpm remove: " + $entryName)

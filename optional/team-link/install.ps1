@@ -8,7 +8,7 @@
 [CmdletBinding()]
 param(
   [string]$Profile = 'desktop',
-  [string]$DshHome = 'C:\Users\15266\.dsh',
+  [string]$DshHome = (Join-Path $env:USERPROFILE '.dsh'),
   [ValidateSet('pc1','pc2')][string]$Role = 'pc1',
   [string]$NodePath = '',
   [int]$A2aPort = 7310,
@@ -203,7 +203,18 @@ if ($RegisterMode -eq "None") {
   Write-Warn2 "-RegisterMode None：只装文件与 skill，不注册（不重启宿主即可用 tools/ 与 skill）"
 } elseif ($RegisterMode -eq "Cli") {
   $dshCmd = Get-Command dsh -ErrorAction SilentlyContinue
-  if (-not $dshCmd) { $cand = "D:\dsh\resources\runtime\cli\bin\dsh.cmd"; if (Test-Path -LiteralPath $cand) { $dshCmd = Get-Item $cand } }
+  if (-not $dshCmd) {
+    # dsh CLI 的兜底探测：从本机装的东西找，不要写死某台机器的安装盘。
+    $cliCandidates = @(
+      (Join-Path $DshHome 'dsh-runtimes\dsh-primary-runtime\cli\bin\dsh.cmd'),
+      (Join-Path $env:LOCALAPPDATA 'Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd'),
+      (Join-Path $env:ProgramFiles 'DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd'),
+      (Join-Path ${env:ProgramFiles(x86)} 'DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd')
+    )
+    foreach ($cand in $cliCandidates) {
+      if ($cand -and (Test-Path -LiteralPath $cand)) { $dshCmd = Get-Item -LiteralPath $cand; break }
+    }
+  }
   if (-not $dshCmd) { Write-Fail "找不到 dsh CLI；改用 -RegisterMode Manual"; exit 1 }
   $cliPath = if ($dshCmd -is [System.Management.Automation.CommandInfo]) { $dshCmd.Source } else { $dshCmd.FullName }
   Write-Info ("pnpm link: " + $cliPath + " plugin --profile " + $Profile + " add link:" + $Bundle)
@@ -255,7 +266,19 @@ Write-Step "7.1/9 建 schemastery 解析 shim（供 lib\index.js 用）"
   # 直接 ERR_MODULE_NOT_FOUND，见 lib\index.js 文件头注释）。这里建一个指向 profile 副本的
   # junction 作为确定性锚点；lib 里另有一条候选链（向上找 / DSH_HOME\profiles\*），
   # 两处都落空时 Config 降级为 undefined，插件仍可启动。
+  # 找副本的顺序很重要：不同机器的 profile 安装形态不同（有的把 schemastery 放在
+  # profiles\<p>\node_modules，有的只有 DSH_HOME\node_modules），所以逐级回退而不是只看一处。
   $schemaSrc = Join-Path $ProfileDir "node_modules\@deepseek-ai\schemastery"
+  if (-not (Test-Path -LiteralPath $schemaSrc)) {
+    $candidate = Join-Path $DshHome "node_modules\@deepseek-ai\schemastery"
+    if (Test-Path -LiteralPath $candidate) { $schemaSrc = $candidate }
+  }
+  if (-not (Test-Path -LiteralPath $schemaSrc)) {
+    foreach ($p in (Get-ChildItem -LiteralPath (Join-Path $DshHome 'profiles') -Directory -ErrorAction SilentlyContinue)) {
+      $candidate = Join-Path $p.FullName "node_modules\@deepseek-ai\schemastery"
+      if (Test-Path -LiteralPath $candidate) { $schemaSrc = $candidate; break }
+    }
+  }
   $shimParent = Join-Path $Bundle "node_modules\@deepseek-ai"
   $shimPath = Join-Path $shimParent "schemastery"
   if (Test-Path -LiteralPath $schemaSrc) {

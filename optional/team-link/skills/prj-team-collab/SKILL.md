@@ -6,11 +6,15 @@ description: PC1<->PC2 双板协作纪律（同等权限组员制）：发令/�
 # prj-team-collab
 
 ## 0. 事实源（引用标签）
-- `手册12` = `C:\Users\15266\Desktop\毕设\操作文档\prj12_双板上板操作手册_P1到M2_v1.0_2026-11-07.md`
+
+> 标签只是**别名**：路径按各自机器实际位置替换（下面给的是 PC1 侧示意，PC2 侧一律换成自己的目录）。
+> 拿不准就先用 `tools/collab_status.ps1` 看 `roots`，再在证据目录里找文件 —— 不要照抄别人的绝对路径。
+
+- `手册12` = prj12 双板上板操作手册（PC1 侧：`<你的毕设目录>\操作文档\prj12_双板上板操作手册_P1到M2_v1.0_2026-11-07.md`）
 - `手册13` = `...\操作文档\prj13_P2开工手册_2026-11-08.md`
-- `RPT` = `D:\FPGA\prj\project_12\out\evidence_2026-11-06\REPORT_P1_2026-11-06.md`
+- `RPT` = 证据根下 `evidence_2026-11-06\REPORT_P1_2026-11-06.md`
 - `DSR`/`VOB`/`CORR` = `...\evidence_2026-11-07_dma_stall\README.md` / `VERIFY_ON_BOARD.md` / `CORRECTION_for_REPORT_P1.md`
-- `DELIV`/`IDX`/`RRAW` = `D:\GSnFPipe-FPGA-PP\README.md` / `fpga\bitstreams\INDEX.md` / `results\raw\20261106_a_p1_dual_board_bringup_v1\README.md`
+- `DELIV`/`IDX`/`RRAW` = 交付仓根 `README.md` / `fpga\bitstreams\INDEX.md` / `results\raw\20261106_a_p1_dual_board_bringup_v1\README.md`
 - `P13`/`FM` = `D:\FPGA\prj\project_13\README.md` / `fork_manifest_13.json`
 - 标注 **【推断】** 的条目是工程判断而非文档原文，落地前需实测确认。
 
