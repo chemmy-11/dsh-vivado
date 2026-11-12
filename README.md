@@ -158,6 +158,7 @@ dsh-vivado/
   templates/                preset 模板、shipped 22 行审计件、persona/ 两档片段、build-markers.tcl
   skills/                   8 个技能 + MANIFEST.json + 来源说明
   patches/vivado-mcp/       11 个可选补丁 + 许可证全文 + 应用/验证说明
+  optional/                 可选插件集合（**默认不安装、不进 Vivado 预设**）：目前 1 个，见 optional/README.md
   docs/                     安装详解、体检详解、版本表、原理、排错、许可
   NOTICE  LICENSE  README.md  README.en.md
 ```
@@ -177,6 +178,7 @@ dsh-vivado/
 | [`docs/licensing.md`](docs/licensing.md) | 上游许可审查（AMD / DeepSeek / vivado-mcp）与我们的义务 |
 | [`NOTICE`](NOTICE) · [`LICENSE`](LICENSE) | 来源与改动清单；MIT 授权与第三方 carve-out |
 | [`dev/README.md`](dev/README.md) | 开发/验收脚本：在隔离 `DSH_HOME` 里跑端到端验收（**不进安装包**） |
+| [`optional/README.md`](optional/README.md) | 可选插件集合：目前只有 PC1↔PC2 协作层 `team-link`（A2A + MCP + issue 回退）。**默认不安装、不进 Vivado 预设**，各插件自带 `install.ps1` / `uninstall.ps1` |
 
 ## 许可与致谢
 
