@@ -1,0 +1,11 @@
+# 本目录全是生成物：Token、配置、日志、备份，绝不入库
+*.token
+config.json
+config.test.json
+tasks/
+inbox/
+verify/
+*.bak-*
+install-manifest.json
+kit-manifest.before.sha256
+skill-manifest.sha256

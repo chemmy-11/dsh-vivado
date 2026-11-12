@@ -1,0 +1,61 @@
+# dsh-vivado-team-link — 本文件是渲染产物，由 install.ps1 从 cordis.patch.yml.tmpl 生成。
+# 作用：在 profile 根**插入两行**，不改 dsh-vivado 的任何文件。
+#
+#   1) id: team-link       —— 本插件自己的宿主插件包（lib/index.js）。职责是把 profile 里的
+#                             config 块物化成 <bundle>/state/config.json，并把凭据存储里的
+#                             token 值物化成 state/*.token。另外注册宿主工具 team_link_setup。
+#   2) id: mcp-team-link   —— stdio MCP 客户端（工具名 mcp__team_link__*），起 server/team-link-mcp.mjs。
+#
+# **行序有意义**：第 1 行先跑，config.json 才存在；第 2 行的子进程启动时才有东西可读。
+# 反过来会让服务端在 config 缺失的情况下起（failOnStartupError=false 时表现为静默无工具）。
+#
+# 卸载：uninstall.ps1 会删除本文件并摘除 dsh.profile.bundles 里的注册项。
+- insert:
+    - id: team-link
+      name: 'dsh-vivado-team-link'
+      config:
+        role: '{{ROLE}}'
+        a2a:
+          host: 127.0.0.1
+          port: {{A2A_PORT}}
+          tokenFile: '{{BUNDLE}}/state/a2a.token'
+          tokenRef: TEAM_LINK_A2A_TOKEN
+        mcp:
+          host: 127.0.0.1
+          port: {{MCP_PORT}}
+          tokenFile: '{{BUNDLE}}/state/mcp.token'
+          tokenRef: TEAM_LINK_MCP_TOKEN
+        peer:
+          name: pc2
+          a2a:
+            tokenFile: '{{BUNDLE}}/state/peer-a2a.token'
+            tokenRef: TEAM_LINK_PEER_A2A_TOKEN
+          mcp:
+            tokenFile: '{{BUNDLE}}/state/peer-mcp.token'
+            tokenRef: TEAM_LINK_PEER_MCP_TOKEN
+        # roots 故意**不写**（继承规则：配置项不表态 → 沿用 state\config.json 既有 roots）。
+        # 原因：配置项一旦给了非空 roots，物化就是整表替换，会把你手写的
+        # evidence / delivery 根顶掉（升级时的真坑）。install.ps1 写出的首版 config.json
+        # 已含 state 根，够用；要加根就解开下面三行并写全（一旦写就要全部列出）：
+        # roots:
+        #   - { id: state, path: '{{BUNDLE}}/state', mode: rw }
+        #   - { id: evidence, path: 'D:/your/evidence/dir', mode: rw }
+        logDir: logs
+    - id: mcp-team-link
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: team_link
+        transport: stdio
+        command: '{{NODE}}'
+        args:
+          - '{{SERVER}}'
+          - '--stdio'
+        cwd: '{{BUNDLE}}'
+        env:
+          TEAM_LINK_CONFIG: '{{CONFIG}}'
+          TEAM_LINK_ROLE: '{{ROLE}}'
+          NODE_NO_WARNINGS: '1'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+        reconnect:
+          enabled: true
