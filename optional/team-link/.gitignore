@@ -1,5 +1,10 @@
 cordis.patch.yml
 logs/
-state/
+# state/ 只忽略运行期产物：**必须**放行模板与它自己的 .gitignore，
+# 否则 config.example.json 不入库 -> 打出来的交付包缺它 -> 干净安装卡在 install.ps1 的 0/9 预检。
+# （git 的规则：目录被忽略后不会 descend，所以要先 `state/*` 再逐条 `!`，不能直接写 `state/`）
+state/*
+!state/.gitignore
+!state/config.example.json
 # install.ps1 建的 schemastery 解析 shim（junction，机器相关，绝不入仓）
 node_modules/

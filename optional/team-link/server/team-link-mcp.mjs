@@ -3,7 +3,8 @@
 // stdio: node server/team-link-mcp.mjs --stdio
 // HTTP : node server/team-link-mcp.mjs --http --port 18790 --config <cfg>
 // 自检 : node server/team-link-mcp.mjs --selftest --config <cfg>   （不监听）
-// 仅绑定 127.0.0.1；零第三方依赖，仅用 Node 标准库。stdout 只输出协议数据。
+// 默认只绑 127.0.0.1；跨机要显式 --host + --allow-lan，且永不接受 192.168.1.0/24。
+// 零第三方依赖，仅用 Node 标准库。stdout 只输出协议数据。
 import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -16,7 +17,17 @@ import { fileURLToPath } from 'node:url';
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLE_DIR = path.resolve(SERVER_DIR, '..');
 const SERVER_NAME = 'team-link';
-const VERSION = '0.1.0';
+/** 版本以 package.json 为唯一真值（曾因写死 0.1.0 与包版本对不上，跨机核对时误导过）。 */
+const VERSION = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(BUNDLE_DIR, 'package.json'), 'utf8'));
+    return typeof pkg.version === 'string' && pkg.version ? pkg.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+/** 两板私有链路：同 IP、同 MAC，打过去会命中错误的那块板且不报错 —— 任何模式下都拒绝。 */
+const FORBIDDEN_CIDR_PREFIX = '192.168.1.';
 const DEFAULT_PROTOCOL = '2025-06-18';
 const LOOPBACK = '127.0.0.1';
 const STARTED_AT = Date.now();
@@ -31,14 +42,17 @@ function printHelp() {
 }
 
 function parseArgv(argv) {
-  const out = { mode: null, selftest: false, port: null, config: null };
+  const out = { mode: null, selftest: false, port: null, config: null, host: null, allowLan: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--stdio') out.mode = 'stdio';
     else if (a === '--http') out.mode = 'http';
     else if (a === '--selftest') out.selftest = true;
+    else if (a === '--allow-lan') out.allowLan = true;
     else if (a === '--port') out.port = Number(argv[i += 1]);
     else if (a.startsWith('--port=')) out.port = Number(a.slice('--port='.length));
+    else if (a === '--host') out.host = argv[i += 1];
+    else if (a.startsWith('--host=')) out.host = a.slice('--host='.length);
     else if (a === '--config') out.config = argv[i += 1];
     else if (a.startsWith('--config=')) out.config = a.slice('--config='.length);
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
@@ -47,10 +61,38 @@ function parseArgv(argv) {
   return out;
 }
 
+/**
+ * 决定实际绑定的地址。安全默认：默认回环；要绑非回环必须**显式** opt-in，且拒绝板卡私有网段。
+ * @param {object} args - parseArgv 结果。
+ * @param {string} cfgHost - 配置里的 mcp.host。
+ * @param {string[]} notes - 收集告警（进日志）。
+ * @returns {string} 实际绑定地址。
+ */
+function resolveBindHost(args, cfgHost, notes) {
+  const optIn = args.allowLan === true || process.env.TEAM_LINK_ALLOW_LAN === '1';
+  let host = (typeof args.host === 'string' && args.host.trim() !== '')
+    ? args.host.trim()
+    : (typeof cfgHost === 'string' && cfgHost.trim() !== '' ? cfgHost.trim() : LOOPBACK);
+  if (host === 'localhost' || host === '::1' || host === '0.0.0.0') {
+    if (host === '0.0.0.0') notes.push('拒绝绑 0.0.0.0（会暴露到所有网卡），已强制改为 ' + LOOPBACK);
+    host = LOOPBACK;   // 注意：0.0.0.0 也必须真的改写，否则日志说"已拒"，实际却绑了所有网卡
+  }
+  if (host === LOOPBACK) return LOOPBACK;
+  if (host.startsWith(FORBIDDEN_CIDR_PREFIX)) {
+    notes.push('拒绝绑 ' + host + '：192.168.1.0/24 是两板私有链路（同 IP/同 MAC），已强制改为 ' + LOOPBACK);
+    return LOOPBACK;
+  }
+  if (!optIn) {
+    notes.push('host=' + host + ' 非回环但未显式放开（缺 --allow-lan / TEAM_LINK_ALLOW_LAN=1），已强制改为 ' + LOOPBACK);
+    return LOOPBACK;
+  }
+  notes.push('已按显式 opt-in 绑非回环地址 ' + host + '（跨机模式）');
+  return host;
+}
+
 function resolveConfigPath(given) {
   const pick = given || process.env.TEAM_LINK_CONFIG || '';
-  if (pick) return path.isAbsolute(pick) ? pick : path.resolve(BUNDLE_DIR, pick);
-  const primary = path.join(BUNDLE_DIR, 'state', 'config.json');
+  if (pick) return path.isAbsolute(pick) ? pick : path.resolve(BUNDLE_DIR, pick);  const primary = path.join(BUNDLE_DIR, 'state', 'config.json');
   if (fs.existsSync(primary)) return primary;
   const fallback = path.join(BUNDLE_DIR, 'state', 'config.example.json');
   if (fs.existsSync(fallback)) return fallback;
@@ -108,12 +150,7 @@ function buildContext(args) {
   const cfg = loadConfig(cfgPath);
   const notes = [];
   const mcpCfg = cfg.mcp || {};
-  let host = typeof mcpCfg.host === 'string' && mcpCfg.host ? mcpCfg.host : LOOPBACK;
-  if (host !== LOOPBACK && host !== 'localhost' && host !== '::1') {
-    notes.push('配置 host=' + host + ' 非回环地址，已强制改为 ' + LOOPBACK);
-    host = LOOPBACK;
-  }
-  host = LOOPBACK;
+  const host = resolveBindHost(args, mcpCfg.host, notes);
   const port = Number.isFinite(args.port) && args.port > 0 ? args.port : Number(mcpCfg.port || 18790);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('端口非法: ' + port);
   const mcpPath = typeof mcpCfg.path === 'string' && mcpCfg.path ? mcpCfg.path : '/mcp';
@@ -581,7 +618,7 @@ async function runSelftest(ctx) {
     const out = await handleMessage(ctx, { jsonrpc: '2.0', id: 4, method: 'initialize', params: { protocolVersion: '2025-06-18' } });
     if (out.result.protocolVersion !== '2025-06-18') throw new Error('protocolVersion 未回显');
     if (!out.result.capabilities || !out.result.capabilities.tools || out.result.capabilities.tools.listChanged !== false) throw new Error('capabilities 非法');
-    if (out.result.serverInfo.name !== 'team-link' || out.result.serverInfo.version !== '0.1.0') throw new Error('serverInfo 非法');
+    if (out.result.serverInfo.name !== 'team-link' || out.result.serverInfo.version !== VERSION) throw new Error('serverInfo 非法（version 应为 ' + VERSION + '，实际 ' + out.result.serverInfo.version + '）');
     const dft = await handleMessage(ctx, { jsonrpc: '2.0', id: 5, method: 'initialize', params: {} });
     if (dft.result.protocolVersion !== DEFAULT_PROTOCOL) throw new Error('缺省 protocolVersion 必须为 ' + DEFAULT_PROTOCOL);
     return true;

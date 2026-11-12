@@ -174,7 +174,13 @@ async function main() {
   }
 
   console.log('== A2A 自环结束 ' + (failed ? '失败' : '成功') + ' ==');
-  process.exit(failed ? 1 : 0);
+  // 不直接 process.exit：本脚本用的是全局 fetch（undici），它持有 keep-alive 连接。
+  // Windows 上 process.exit 与 uv 句柄关闭撞车会 abort（Assertion failed: !(handle->flags &
+  // UV_HANDLE_CLOSING), src\win\async.c:94），表现为"四项全 PASS 但退出码是负数"。
+  // 正确做法：设 exitCode 让事件循环自然收尾；仅在还有句柄挂着时兜底硬退（unref 不影响正常路径）。
+  process.exitCode = failed ? 1 : 0;
+  const bail = setTimeout(() => process.exit(failed ? 1 : 0), 800);
+  bail.unref();
 }
 
 main().catch((e) => {

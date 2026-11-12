@@ -321,7 +321,41 @@ window.__ModuleLoader__.load({
 
 端口来自 `state/config.json` 的 `a2a.port` / `mcp.port`（默认值见 §4.3），不是写死的。
 
-**本轮不开外网监听**：两个服务默认只 bind `127.0.0.1`。要跨机，必须先确认网卡与 IP，再把 `state/config.json` 的 `a2a.host` / `mcp.host` 改成该网卡地址，并确保防火墙只对该网段放行 7310/18790。
+### 5.1 跨机：必须**显式**放开（v0.3.1 起）
+
+默认仍然只绑 `127.0.0.1`。要把通道开到 LAN，**两个条件同时满足**才真的绑非回环：
+
+```powershell
+# 1) 先看本机该用哪个地址（WLAN / 第二网卡 / Tailscale）
+Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' }
+
+# 2) 启动时给 --host + --allow-lan（两个缺一不可）
+node server\team-link-a2a.mjs --http --host 10.x.x.x --allow-lan --port 7310 --config state\config.json
+node server\team-link-mcp.mjs --http --host 10.x.x.x --allow-lan --port 18790 --config state\config.json
+
+# 等价写法：只要环境变量就够（便于放进启动脚本）
+$env:TEAM_LINK_ALLOW_LAN = "1"
+```
+
+三道保险（代码里硬编码，绕不过去）：
+
+| 输入 | 结果 |
+|---|---|
+| `host` 是回环 / `localhost` / `::1` | 绑 `127.0.0.1`（正常） |
+| `host` 非回环但**没给** `--allow-lan` | **拒绝**，回落 `127.0.0.1` 并写 warn（日志里有原因） |
+| `host` = `0.0.0.0` | **拒绝**（会暴露所有网卡），回落 `127.0.0.1` |
+| `host` = `192.168.1.*` | **拒绝**（两板私有链路，同 IP/同 MAC，会打错板且不报错），回落 `127.0.0.1` |
+
+防火墙：Windows 三个配置档默认拦入站，跨机要一条入站规则（管理员）。只放对端一个地址，例如：
+
+```powershell
+New-NetFirewallRule -DisplayName "team-link from <对端IP>" -Direction Inbound -Action Allow `
+  -Protocol TCP -LocalPort 7310,18790 -RemoteAddress <对端IP>/32
+# 回滚
+Remove-NetFirewallRule -DisplayName "team-link from <对端IP>"
+```
+
+不开 LAN 也能干活：**stdio 通道 + issue 轮询**完全不需要端口，单机四项验收与协作纪律都照常。
 
 ## 6. 网络与安全（硬约束）
 
@@ -369,7 +403,8 @@ powershell -NoProfile -File tools\collab_status.ps1          # 通道断开时�
 
 ## 10. 版本
 
-0.3.0 —— **GUI 版**：新增 `lib/client.js`（手写客户端 bundle，零构建）。面板有两个入口、同一张表单：**设置里的一级分区**（`settings.section`，id `team-link`、order 20、label「PC 协作」，与「通用设置」「模型」「内置插件」同级，一次点击就到）与**插件页的行配置页**（keyed slot `plugins.row.config`，键 `dsh-vivado-team-link#team-link`）；一级分区拿不到宿主递来的 form，自己用 `ctx.configForms` 按 entry id 取。Config 里除 `fallback.mode` 外全部字段标 `.volatile()`（宿主只 serve volatile 字段），`apply()` 订阅 `loader/volatile-update` 在面板保存后立即重物化 `config.json`。面板能改角色/地址/端口/对端/回退/日志目录/授权根，**不收也不显示 token 值**。实测（独立 profile 的第二个宿主）：一级导航项出现、页面渲染、保存、profile patch 落盘、`config.json` 重物化、roots 不丢。
+0.3.1 —— **跨机可用 + 交付修复**：① A2A/MCP 服务端新增显式 LAN 开关（`--host <ip>` + `--allow-lan`，或 `TEAM_LINK_ALLOW_LAN=1`），默认仍只绑回环，`0.0.0.0` 与 `192.168.1.*` 一律拒绝（见 §5.1）；② `VERSION` 改为从 `package.json` 读（此前写死 `0.1.0`，AgentCard/initialize 的版本串与包版本对不上，跨机核对时误导）；③ 修 `client\a2a-selfloop.mjs` 在 Windows 上的退出竞态 —— 四项全 PASS 却因 `process.exit` 与 undici 句柄关闭撞车而 abort（`UV_HANDLE_CLOSING`，退出码变负），改为设 `exitCode` 让事件循环自然收尾 + unref 兜底，连跑 5/5 稳定 exit 0；④ **`.gitignore` 修 `state/` 误伤**：整目录忽略导致 `state\config.example.json` 从未入库、交付包缺它，干净安装会卡在 `install.ps1` 的 0/9 预检（PC2 实测踩到，现场重建才装上）—— 改为 `state/*` + 逐条 `!` 放行模板。
+0.3.0 —— **GUI 版**：新增 `lib/client.js`（手写客户端 bundle，零构建）。面板有两个入口、同一张表单：**设置里的一级分区**（`settings.section`，id `team-link`、order 20、label「PC 协作」，与「通用设置」「模型」「内置插件」同级，一次点击就到）与**插件页的行配置页**（keyed slot `plugins.row.config`，键 `dsh-vivado-team-link#team-link`）；一级分区拿不到宿主递来的 form，自己用 `ctx.configForms` 按 entry id 取。Config 里除 `fallback.mode` 外全部字段标 `.volatile()`（宿主只 serve volatile 字段），`apply()` 订阅 `loader/volatile-update` 在面板保存后立即重物化 `config.json`。面板能改角色/地址/端口/对端/回退/日志目录/授权根，**不收也不显示 token 值**。
 
 0.2.0 —— **宿主半边落地版**：`cordis.patch.yml` 从一行变两行（`team-link` + `mcp-team-link`）、配置项进 profile、token 值走凭据存储、宿主工具 `team_link_setup` 上线；GUI 配置面板仍未做（§4.1 / §4.7）。
 版本号以 `package.json` / `plugin.json` 为准；清单字段见 `plugin.json` 的 `provides` / `writes` / `rollback`。

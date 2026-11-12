@@ -131,12 +131,12 @@ async function main() {
     console.log('token 文件: ' + tp);
 
     // 1. initialize
-    const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mcp-selfloop', version: '0.1.0' } } }, token);
+    const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mcp-selfloop', version: '1.0.0' } } }, token);
     if (init.status !== 200 || !init.json || !init.json.result) throw new Error('initialize 失败: HTTP ' + init.status + ' ' + init.text.slice(0, 200));
     const sr = init.json.result;
     if (sr.protocolVersion !== '2025-06-18') throw new Error('protocolVersion 未回显: ' + sr.protocolVersion);
     if (!sr.capabilities || !sr.capabilities.tools || sr.capabilities.tools.listChanged !== false) throw new Error('capabilities 非法');
-    if (!sr.serverInfo || sr.serverInfo.name !== 'team-link' || sr.serverInfo.version !== '0.1.0') throw new Error('serverInfo 非法');
+    if (!sr.serverInfo || sr.serverInfo.name !== 'team-link' || !/^\d+\.\d+\.\d+/.test(String(sr.serverInfo.version))) throw new Error('serverInfo 非法');
     pass('initialize', sr.serverInfo.name + ' ' + sr.serverInfo.version + ' protocolVersion=' + sr.protocolVersion);
 
     // 2. notifications/initialized（不得回复正文）
@@ -226,7 +226,13 @@ async function main() {
   }
 
   console.log('== MCP 自环结束 ' + (failed ? '失败' : '成功') + ' ==');
-  process.exit(failed ? 1 : 0);
+  // 不直接 process.exit：本脚本用的是全局 fetch（undici），它持有 keep-alive 连接。
+  // Windows 上 process.exit 与 uv 句柄关闭撞车会 abort（Assertion failed: !(handle->flags &
+  // UV_HANDLE_CLOSING), src\win\async.c:94），表现为"四项全 PASS 但退出码是负数"。
+  // 正确做法：设 exitCode 让事件循环自然收尾；仅在还有句柄挂着时兜底硬退（unref 不影响正常路径）。
+  process.exitCode = failed ? 1 : 0;
+  const bail = setTimeout(() => process.exit(failed ? 1 : 0), 800);
+  bail.unref();
 }
 
 main().catch((e) => {

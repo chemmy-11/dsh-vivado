@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// team-link A2A 服务端（阶段 B，单机自环）。
+// team-link A2A 服务端（阶段 B，单机自环 + 可选跨机）。
 // 启动：node server/team-link-a2a.mjs --http --port 7310 --config <cfg>
+//       跨机：再加 --host <本机LAN地址> --allow-lan   （两个都要给才真的绑非回环）
 // 自检：node server/team-link-a2a.mjs --selftest --config <cfg>   （只自检，不监听）
-// 仅绑定 127.0.0.1；零第三方依赖，仅用 Node 标准库。
+// 默认只绑 127.0.0.1。要把通道暴露到 LAN 必须**显式**给 --host + --allow-lan
+// （或环境变量 TEAM_LINK_ALLOW_LAN=1），且永不接受 192.168.1.0/24（两板同 IP/MAC 的私有链路）。
+// 零第三方依赖，仅用 Node 标准库。
 import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -13,32 +16,77 @@ import { fileURLToPath } from 'node:url';
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLE_DIR = path.resolve(SERVER_DIR, '..');
 const SERVER_NAME = 'team-link';
-const VERSION = '0.1.0';
+/** 版本以 package.json 为唯一真值（曾因写死 0.1.0 与包版本对不上，跨机核对时误导过）。 */
+const VERSION = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(BUNDLE_DIR, 'package.json'), 'utf8'));
+    return typeof pkg.version === 'string' && pkg.version ? pkg.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
 const PROTOCOL_VERSION = '0.2.0';
 const LOOPBACK = '127.0.0.1';
+/** 两板私有链路：同 IP、同 MAC，打过去会命中错误的那块板且不报错 —— 任何模式下都拒绝。 */
+const FORBIDDEN_CIDR_PREFIX = '192.168.1.';
 
 function printHelp() {
   console.error([
     '用法: node server/team-link-a2a.mjs --http --port <端口> --config <配置文件>',
     '      node server/team-link-a2a.mjs --selftest --config <配置文件>',
-    '说明: 仅监听 127.0.0.1；AgentCard 免认证，POST 通道强制 Bearer。'
+    '      node server/team-link-a2a.mjs --http --host <本机LAN地址> --allow-lan --port <端口> --config <配置文件>',
+    '说明: 默认只监听 127.0.0.1。跨机必须**同时**给 --host 与 --allow-lan（或 TEAM_LINK_ALLOW_LAN=1）。',
+    '      192.168.1.0/24 永远拒绝（两板私有链路，同 IP/同 MAC）。',
+    '      AgentCard 免认证，POST 通道强制 Bearer。'
   ].join('\n'));
 }
 
 function parseArgv(argv) {
-  const out = { http: false, selftest: false, port: null, config: null };
+  const out = { http: false, selftest: false, port: null, config: null, host: null, allowLan: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--http') out.http = true;
     else if (a === '--selftest') out.selftest = true;
+    else if (a === '--allow-lan') out.allowLan = true;
     else if (a === '--port') out.port = Number(argv[i += 1]);
     else if (a.startsWith('--port=')) out.port = Number(a.slice('--port='.length));
+    else if (a === '--host') out.host = argv[i += 1];
+    else if (a.startsWith('--host=')) out.host = a.slice('--host='.length);
     else if (a === '--config') out.config = argv[i += 1];
     else if (a.startsWith('--config=')) out.config = a.slice('--config='.length);
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
     else { console.error('未知参数: ' + a); printHelp(); process.exit(2); }
   }
   return out;
+}
+
+/**
+ * 决定实际绑定的地址。安全默认：默认回环；要绑非回环必须**显式** opt-in，且拒绝板卡私有网段。
+ * @param {object} args - parseArgv 结果。
+ * @param {string} cfgHost - 配置里的 a2a.host。
+ * @param {string[]} notes - 收集告警（进日志）。
+ * @returns {string} 实际绑定地址。
+ */
+function resolveBindHost(args, cfgHost, notes) {
+  const optIn = args.allowLan === true || process.env.TEAM_LINK_ALLOW_LAN === '1';
+  let host = (typeof args.host === 'string' && args.host.trim() !== '')
+    ? args.host.trim()
+    : (typeof cfgHost === 'string' && cfgHost.trim() !== '' ? cfgHost.trim() : LOOPBACK);
+  if (host === 'localhost' || host === '::1' || host === '0.0.0.0') {
+    if (host === '0.0.0.0') notes.push('拒绝绑 0.0.0.0（会暴露到所有网卡），已强制改为 ' + LOOPBACK);
+    host = LOOPBACK;   // 注意：0.0.0.0 也必须真的改写，否则日志说"已拒"，实际却绑了所有网卡
+  }
+  if (host === LOOPBACK) return LOOPBACK;
+  if (host.startsWith(FORBIDDEN_CIDR_PREFIX)) {
+    notes.push('拒绝绑 ' + host + '：192.168.1.0/24 是两板私有链路（同 IP/同 MAC），已强制改为 ' + LOOPBACK);
+    return LOOPBACK;
+  }
+  if (!optIn) {
+    notes.push('host=' + host + ' 非回环但未显式放开（缺 --allow-lan / TEAM_LINK_ALLOW_LAN=1），已强制改为 ' + LOOPBACK);
+    return LOOPBACK;
+  }
+  notes.push('已按显式 opt-in 绑非回环地址 ' + host + '（跨机模式）');
+  return host;
 }
 
 function resolveConfigPath(given) {
@@ -107,12 +155,7 @@ function buildContext(args) {
   const cfg = loadConfig(cfgPath);
   const notes = [];
   const a2aCfg = cfg.a2a || {};
-  let host = typeof a2aCfg.host === 'string' && a2aCfg.host ? a2aCfg.host : LOOPBACK;
-  if (host !== LOOPBACK && host !== 'localhost' && host !== '::1') {
-    notes.push('配置 host=' + host + ' 非回环地址，已强制改为 ' + LOOPBACK);
-    host = LOOPBACK;
-  }
-  if (host === 'localhost' || host === '::1') host = LOOPBACK;
+  const host = resolveBindHost(args, a2aCfg.host, notes);
   const port = Number.isFinite(args.port) && args.port > 0 ? args.port : Number(a2aCfg.port || 7310);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('端口非法: ' + port);
   const a2aPath = typeof a2aCfg.path === 'string' && a2aCfg.path ? a2aCfg.path : '/';
@@ -359,7 +402,7 @@ async function runSelftest(ctx) {
     const c = buildAgentCard(ctx);
     const need = ['name', 'description', 'url'];
     for (const k of need) if (!c[k] || typeof c[k] !== 'string') throw new Error('AgentCard.' + k + ' 为空');
-    if (c.version !== '0.1.0') throw new Error('version 必须为 0.1.0');
+    if (c.version !== VERSION) throw new Error('version 必须为 ' + VERSION + '（取自 package.json），实际 ' + c.version);
     if (c.protocolVersion !== '0.2.0') throw new Error('protocolVersion 必须为 0.2.0');
     if (!c.capabilities || c.capabilities.streaming !== false) throw new Error('capabilities.streaming 必须为 false');
     if (JSON.stringify(c.defaultInputModes) !== '["text/plain"]') throw new Error('defaultInputModes 必须为 ["text/plain"]');
