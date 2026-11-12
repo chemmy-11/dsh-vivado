@@ -1,6 +1,6 @@
 {
   "name": "dsh-vivado-team-link",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Optional DSH bundle fragment for dsh-vivado: PC1<->PC2 collaboration layer (A2A + MCP, issue fallback). Independent bundle; not part of the Vivado preset by default.",

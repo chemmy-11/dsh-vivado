@@ -1,7 +1,7 @@
 {
     "id":  "dsh-vivado-team-link",
     "name":  "dsh-vivado-team-link",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "kind":  "optional-bundle-fragment",
     "parentBundle":  "dsh-vivado@0.2.3",
     "installMode":  "optional",
