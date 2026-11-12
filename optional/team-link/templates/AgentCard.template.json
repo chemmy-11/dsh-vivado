@@ -1,0 +1,89 @@
+{
+  "_comment": {
+    "purpose": "team-link A2A AgentCard 骨架：对端用 GET <a2a.url><a2a.agentCardPath> 读取本文件，据此判断对端是谁（防连错机器）。",
+    "how_to_use": [
+      "1. 复制本文件为 <bundle>\\state\\agent.json，由 A2A server 在 config.a2a.agentCardPath（缺省 /.well-known/agent.json）静态返回。",
+      "2. 把所有 <UPPER_SNAKE> 占位符替换成真实值，替换后不得残留尖括号。",
+      "3. 改完用 ConvertFrom-Json 或 JSON.parse 校验一次可解析。"
+    ],
+    "placeholders": {
+      "<MACHINE_ROLE>": "本机角色，取值必须是 pc1 或 pc2，且与 config.json 的 role 完全一致。",
+      "<MACHINE_NAME>": "机器显示名，与 config.json 的 machine 一致（PC1 或 PC2）。",
+      "<A2A_BASE_URL>": "对端可访问的本机 A2A 基址，形如 http://127.0.0.1:7310/ 或 http://<PC2_WLAN_IP>:7310/；端口必须等于 config.json 的 a2a.port，路径部分必须等于 a2a.path。",
+      "<A2A_VERSION>": "AgentCard 版本号，本套件固定 1.0.0。",
+      "<AGENT_NAME>": "对端用来识别本机的短名字，建议直接用 MACHINE_NAME 的小写形式。",
+      "<AGENT_DESCRIPTION>": "一句话说明本机职责（例如：PC1，跑 Vivado 综合/PnR 与记账）。",
+      "<PROVIDER_ORG>": "组织名，本项目固定 GSnFPipe。",
+      "<PROVIDER_URL>": "仓库或文档地址，例如 https://github.com/chemmy-11/GSnFPipe-FPGA-PP。",
+      "<SKILL_ID>": "技能唯一 id（小写短横线），对端在 tools/call 里按它选能力。",
+      "<SKILL_NAME>": "技能中文名，写给人看。",
+      "<SKILL_DESCRIPTION>": "技能做什么、什么输入、什么输出，一句话。",
+      "<SKILL_TAG>": "技能标签，例如 vivado / evidence / audit。",
+      "<SKILL_EXAMPLE>": "一条真实调用示例，例如 拉取 report_utilization.txt 并校验 SHA256。",
+      "<MCP_URL>": "本机 MCP 端点，形如 http://127.0.0.1:18790/mcp；host/port/path 必须与 config.json 的 mcp 段一致。",
+      "<ROOT_ID_LIST>": "本机开放的 MCP root id 列表，必须与 config.json 的 roots[].id 完全一致（证据拉取靠 root:relPath 寻址）。"
+    },
+    "must_match_config_json": [
+      "role            <-> role                          （pc1 / pc2，不得写成 PC1）",
+      "machine         <-> machine",
+      "url 的 host/port <-> a2a.host / a2a.port          （一律 127.0.0.1，不得对外监听）",
+      "url 的路径        <-> a2a.path",
+      "extensions.mcpUrl <-> mcp.host / mcp.port / mcp.path",
+      "skills[].id 覆盖的 root <-> roots[].id           （MCP root id 必须能在 skills 里对上）"
+    ],
+    "fields_not_in_card": [
+      "tokenFile（a2a.token / mcp.token）属于机密，绝不写进 AgentCard。",
+      "logDir / evidenceDir / fallback 属于本地运维配置，不对外暴露。"
+    ]
+  },
+  "name": "<AGENT_NAME>",
+  "description": "<AGENT_DESCRIPTION>",
+  "url": "<A2A_BASE_URL>",
+  "preferredTransport": "JSONRPC",
+  "version": "<A2A_VERSION>",
+  "provider": {
+    "organization": "<PROVIDER_ORG>",
+    "url": "<PROVIDER_URL>"
+  },
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "skills": [
+    {
+      "id": "<SKILL_ID>",
+      "name": "<SKILL_NAME>",
+      "description": "<SKILL_DESCRIPTION>",
+      "tags": [
+        "<SKILL_TAG>"
+      ],
+      "examples": [
+        "<SKILL_EXAMPLE>"
+      ],
+      "inputModes": [
+        "application/json"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    }
+  ],
+  "extensions": {
+    "_comment": "本地扩展块：对端用它确认 MCP 侧，非 A2A 标准字段，可整体删除。",
+    "role": "<MACHINE_ROLE>",
+    "machine": "<MACHINE_NAME>",
+    "mcpUrl": "<MCP_URL>",
+    "roots": [
+      "<ROOT_ID_LIST>"
+    ]
+  }
+}

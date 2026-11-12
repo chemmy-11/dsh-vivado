@@ -1,0 +1,5 @@
+cordis.patch.yml
+logs/
+state/
+# install.ps1 建的 schemastery 解析 shim（junction，机器相关，绝不入仓）
+node_modules/
