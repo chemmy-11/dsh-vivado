@@ -25,7 +25,7 @@ optional/team-link/
   package.json             # DSH bundle 描述符（dsh.bundle.patch -> cordis.patch.yml）
   lib/
     index.js               # 宿主半边：导出 name / Config / apply，物化 config.json、把凭据写进 token 文件
-                           #   lib/client.js 是下一轮的 GUI 卡片（见 §4.7），本轮不存在
+    client.js              # 浏览器半边：GUI 配置卡片（手写 bundle，注册进 plugins.row.config；见 §4.7）
   cordis.patch.yml.tmpl    # 由 install.ps1 渲染成 cordis.patch.yml（注入两条：team-link + mcp-team-link）
   cordis.patch.yml         # 渲染产物（install 生成，uninstall -Purge 删除）
   install.ps1              # 注册 bundle + 拷 skill + 写配置 + kit 哈希自证
@@ -88,14 +88,20 @@ powershell -NoProfile -File uninstall.ps1 -Profile desktop -Purge
 
 回滚语义：`uninstall.ps1` 摘除注册 → 校验并删除 skill 副本（若你改过 skill 文件，默认**不删**并提示，需 `-Force`）→ 残留检查 → 可选清产物 → 再次复核 kit 哈希。`-UnregisterMode Restore` 会用安装前备份整体还原 `package.json`（仅适用于"刚装就回滚"，否则会丢掉之后新装的插件）。
 
-## 4. 设置与配置（宿主半边，**现在没有 GUI 面板**）
+## 4. 设置与配置（**有 GUI 面板了**：设置 → 插件 → 本行 → 配置）
 
 ### 4.1 结论先行
 
-本轮只交付**宿主半边**。配置入口是 **profile 配置项**（`cordis.patch.yml` 的 `config:` 块 / DSH profile 配置文件），不是设置页里的卡片。
-**「设置 → 插件 → 本行 → 配置」这个 GUI 面板现在不存在**，下一轮才做（§4.7）；任何文档/回复都不要暗示它已经能用。
+配置有两个入口，改的是**同一份** profile 配置：
 
-原因：DeepSeek Harness **0.2.2-rc.1 没有「按 Config Schema 自动渲染原生表单」这层 UI**。四条证据（均已核对）：
+1. **GUI 卡片（推荐）**：`设置 → 插件 → 已安装的插件 → dsh-vivado-team-link → 行 team-link → 配置`。
+   面板能改角色 / 机器名 / A2A·MCP 的 host 与 port / 对端名字与地址 / 回退仓库与标签与轮询间隔 / 日志目录 / 授权根。
+   **它不收 token 值**（原因见 §4.5），只显示 token 的引用名与文件路径。
+2. **profile 配置项**：`cordis.patch.yml` 的 `config:` 块。卡片保存的也是这里 —— 宿主会把改动的字段写成一条
+   `- id: team-link` 的覆盖项，所以「GUI 改」与「手改 YAML」不会打架。
+
+GUI 面板**不是宿主自动生成的**：DSH 0.2.2-rc.1 没有「按 Config Schema 自动渲染原生表单」这层 UI，面板只能由插件
+自己占一个 keyed slot。四条证据（均已核对）：
 
 | # | 证据 | 说明 |
 |---|---|---|
@@ -104,11 +110,13 @@ powershell -NoProfile -File uninstall.ps1 -Profile desktop -Purge
 | 3 | `dsh-client-ui-settings-plugins/lib/client.js`：「插件配置页住在各自的伴生包里，本分区只拥有导航项和 tab 外壳」 | 面板必须由插件自己注册 |
 | 4 | `@linxin666/*` 每个设置面板都是各包自带的 `*SettingsCard.tsx`（实例：`@linxin666/dsh-agents/src/client/AgentsSettingsCard.tsx`） | 现状是"谁有面板谁自己写" |
 
-复核留痕（本机实测，宿主 asar 内字符串命中）：`plugins.row.config` 20 处、`dsh-client-ui-settings-plugins` 38 处、「自身不渲染任何界面」1 处。命中都落在 owner 侧代码与文档示例里 —— 这是留痕，不是独立证明；真正的判据是第 1、3 条的文档原文（第 2 条是同一结论在 asar 里的落点）。
+所以本插件自带 `lib/client.js`（**手写 bundle + `React.createElement`，无 JSX、无构建步骤**），
+通过 `package.json` 的 `dsh.client` + `exports["./client"]` 交给宿主，注册进 `plugins.row.config`
+（键 `<包名>#<行 id>` = `dsh-vivado-team-link#team-link`）。实现细节与踩过的坑见 §4.7。
 
-旁证：**schemastery 3.19.0**（本 profile 实装版本）**没有 secret / password 类型**。也就是说即使宿主明天开始自动渲染表单，密文输入框在 schema 层也没有承载物，token 依然收不进去。
-
-所以本轮把"表单收 token"拆成两步：**配置项收非密参数**，**宿主工具 `team_link_setup` 收 token 值**（值只进凭据存储，见 §4.5）。
+旁证：**schemastery 3.19.0** 没有 secret / password 类型。所以即使哪天宿主开始自动渲染表单，
+密文输入框在 schema 层也没有承载物 —— token 值永远不走配置。落地方式是：**配置项收非密参数**，
+**宿主工具 `team_link_setup` 收 token 值**（值只进凭据存储，见 §4.5）。
 
 ### 4.2 两半结构：宿主插件 + MCP 客户端
 
@@ -247,10 +255,48 @@ team_link_setup { action: "clear-token", token: "peer-mcp" }
 
 非密参数走配置项、密文走凭据存储，是本版本唯一能落地的组合：宿主没有自动表单（§4.1 的四条证据），schemastery 3.19.0 也没有 secret 类型；硬把明文 token 塞进 `config:`，等于同时污染 profile 配置、`*.bak-*` 备份和卸载回滚链。`team_link_setup` 对标 `task_board_github_setup`：值只进凭据存储，工具自己绝不返回值。
 
-### 4.7 下一轮：GUI 卡片
+### 4.7 GUI 卡片：怎么做的、踩过什么坑
 
-写法已定，**不需要构建步骤**：在 `lib/client.js` 里用 `React.createElement` 把卡片注册进 keyed slot **`plugins.row.config`**，key = `<包名>#team-link`。
-在那之前，「设置 → 插件 → 本行 → 配置」没有面板 —— 配置改动就改 profile 的 `config:` 块，token 改动就用 `team_link_setup`。
+`lib/client.js` 是一个**手写的客户端 bundle**（不引入构建链）：
+
+```js
+window.__ModuleLoader__.load({
+  id: 'dsh-vivado-team-link',
+  factory: (require) => {
+    const React = require('react')            // 平台冻结模块表里的 react
+    // …注册卡片…
+    return { apply, inject: ['slots'] }
+  },
+})
+```
+
+要点（每条都是实测结论，不是推测）：
+
+- **声明**：`package.json` 的 `dsh.client: { platform: 'web' }` + `exports["./client"]`。宿主的
+  `dsh-client-modules` 据此把它编进启动图（`/plugins/??…,dsh-vivado-team-link/client.js&rev=…`）。
+  缺了 `lib/client.js` 会让该行**激活失败**并报"缺构建产物"。
+- **占位**：`ctx.slots.inject('plugins.row.config', …)` → `ctx.slots.register({ name, key }, Card)`，
+  key 必须是 `<包名>#<行 id>`（本插件 `dsh-vivado-team-link#team-link`）。注册成功后，行标题变成
+  可点按钮（`aria-label="配置 <包名>"`），点进去就是本卡片。
+- **props**：`{ view, form }`。`view === 'summary'` 渲染列表摘要；`view === 'page'` 渲染整页。
+  `form.state = { status, value, base, user, revision, writable }`，
+  `form.mutate(ops, revision)`，`ops` 形如 `{ op: 'set', path: ['a2a','port'], value: 7311 }`（原子提交，冲突返回 `false`）。
+- **宿主只 serve `.volatile()` 字段**：`form.state.value` 里只有标了 volatile 的字段。这条坑过一次 ——
+  `tokenRef/tokenFile` 一开始没标，卡片里永远显示"未设引用名"。现在 Config 里除 `fallback.mode` 外全部 volatile。
+- **绝不裸调 `ctx.get('远程服务')`**：未 inject 的服务会**抛错**，而 slot 里的异常会把整张卡片崩掉
+  （实测报错 `cannot get property "remote.credentials" without inject`，面板全白）。所以卡片
+  **不读凭据状态** —— 那个"已配置/未配置"徽章要 `remote.credentials` 这种非必需服务，不值得为它赌面板挂不挂载；
+  权威状态请用 `team_link_setup {action:"status"}`（只报存在性、不返回值）。
+- **保存后要有反应**：宿主对 volatile 字段只发 `loader/volatile-update`（**不重挂插件**），
+  所以 `lib/index.js` 订阅了这条事件并重新物化 `state/config.json`；否则卡片改了、config.json 还停在启动那一刻。
+- **roots 的特殊语义**：框里空 = 本配置项没声明 roots → 沿用 `state/config.json` 既有授权根（不会被清空）；
+  框里非空 = **整表替换**。卡片会按当前状态把这句话显示出来，避免"以为删了其实没删"。
+
+> 怎么在不重启 Electron 宿主的前提下验 UI：用一个临时 profile 起第二个宿主，
+> `dsh --profile <临时名> --from-default-profile web --dump-config` 建 profile → 手工 junction +
+> `dsh.profile.bundles` 加一条（等价 `-RegisterMode Manual`）→ `dsh --profile <临时名> --no-open --host 127.0.0.1 --port <端口>`
+> → 用启动行打印的 `?token=…` URL 打开。验完删 profile、删 junction。**改客户端文件只需刷页面**
+> （bundle URL 带文件元数据算出的 rev），改 `lib/index.js` / `Config` 才需要重启宿主。
 
 ## 5. 通道与端口
 
@@ -302,12 +348,15 @@ powershell -NoProfile -File tools\collab_status.ps1          # 通道断开时�
 ## 9. 已知风险
 
 - **从仓重装 kit 会替换整个 staging 目录（含 `optional/`）**：dsh-vivado 的 `install.ps1` 会把 kit 重新 stage 到 `<DshHome>\bundles\dsh-vivado`，这是**整目录替换**，不是增量合并——`optional/team-link/` 里的本地改动会被一起换掉。所以**开发一律在仓里做，部署副本只当运行目标**；部署副本上换完 kit 需重新跑本插件的 `install.ps1`（`state/` 里的 token 与配置若没被带走需重新生成，随后由 `apply()` 按 profile 配置物化/重建，见 §4.4）。
-- **GUI 配置面板尚不存在**（§4.1/§4.7）：现在改配置只能改 profile 的 `config:` 块，改 token 只能用 `team_link_setup`。看到别人说"在设置里填"一律是错的。
+- **GUI 面板改的是 profile 配置，不是运行中的服务**：卡片保存后宿主会立刻重物化 `state/config.json`（`apply()` 订阅了 `loader/volatile-update`），但 A2A/MCP 两个服务是**启动时**读端口与 token 的 —— 改完要重启宿主才在通道上生效。凡是说"存了就生效"都是错的。
+- **GUI 卡片不读凭据状态**（§4.7）：`remote.credentials` 是非必需服务，未 inject 就取会抛错并崩掉整张卡片，所以"token 配没配"请用 `team_link_setup {action:"status"}` 查。
 - `-RegisterMode Cli` 依赖 `dsh` CLI 与 pnpm 在工作目录内解析 link:；离线或 pnpm 异常时用 `-RegisterMode Manual`（等价于手工 junction + `dsh.profile.bundles` 条目）。
 - 端口冲突：7310/18790 被占用时 A2A/MCP 起不来，`collab_status.ps1` 会如实报不可用而不是假装正常。
 - 中文路径：所有 `config.json` 路径建议 ASCII（与 kit 对 Vivado 的要求一致），至少 `state/` 与证据目录保持 ASCII。
 
 ## 10. 版本
+
+0.3.0 —— **GUI 版**：新增 lib/client.js（手写客户端 bundle，零构建），把配置卡片注册进 keyed slot plugins.row.config（键 dsh-vivado-team-link#team-link）；Config 里除 allback.mode 外全部字段标 .volatile()（宿主只 serve volatile 字段），pply() 订阅 loader/volatile-update 在卡片保存后立即重物化 config.json。面板能改角色/地址/端口/对端/回退/日志目录/授权根，**不收也不显示 token 值**。已在独立测试 profile 上实测：面板渲染、保存、profile patch 落盘、config.json 重物化、roots 不丢。
 
 0.2.0 —— **宿主半边落地版**：`cordis.patch.yml` 从一行变两行（`team-link` + `mcp-team-link`）、配置项进 profile、token 值走凭据存储、宿主工具 `team_link_setup` 上线；GUI 配置面板仍未做（§4.1 / §4.7）。
 版本号以 `package.json` / `plugin.json` 为准；清单字段见 `plugin.json` 的 `provides` / `writes` / `rollback`。

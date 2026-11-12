@@ -1,10 +1,15 @@
 {
   "name": "dsh-vivado-team-link",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Optional DSH bundle fragment for dsh-vivado: PC1<->PC2 collaboration layer (A2A + MCP, issue fallback). Independent bundle; not part of the Vivado preset by default.",
   "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
   "license": "SEE LICENSE IN ../../../LICENSE",
   "engines": {
     "node": ">=20"
@@ -12,6 +17,9 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
     },
     "engines": {
       "dsh": ">=0.2.2-rc.1"

@@ -13,6 +13,9 @@
 |---|---|---|---|
 | [`team-link/`](team-link/README.md) | `dsh-vivado-team-link` | PC1↔PC2 协作层：A2A（7310）+ MCP（18790/stdio）+ 协作 issue 回退；PC2 是同等权限组员，靠口令+证据+审计约束 | Node ≥ 20、PowerShell ≥ 5.1、DSH ≥ 0.2.2-rc.1 |
 
+> `team-link` 有 **GUI 配置面板**：装好后重启宿主，在 `设置 → 插件 → 已安装的插件 → dsh-vivado-team-link → 行 team-link → 配置`
+> 里改角色 / 地址 / 端口 / 对端 / 回退 / 授权根。token **值**不在面板里（面板只显示引用名与文件路径），写入用宿主工具 `team_link_setup`。
+
 ## 装一个
 
 从**本仓 clone 出来的目录**里直接跑（推荐，PC2 的正路）：

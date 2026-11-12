@@ -178,41 +178,55 @@ const z = await loadSchemastery()
 
 /**
  * 构造 Config schema。
+ *
+ * ## 为什么每个可编辑字段都 `.volatile()`
+ *
+ * 宿主（0.2.2-rc.1）只把 Config 里 **volatile** 的字段当作设置页可写路径，其余路径的写入会被
+ * 拒绝（不是我们说了算）。所以「卡片上能改的字段」与「这里标了 volatile 的字段」必须是同一批：
+ * 加了 `lib/client.js` 的卡片之后，role / 机器名 / host / port / peer / roots / fallback / logDir
+ * 全部标 volatile。tokenFile 与 tokenRef **也标** volatile —— 不是为了让人在 GUI 里改它们
+ * （卡片只把它们当只读信息展示），而是因为宿主只 serve volatile 字段：不标的话卡片里拿到的
+ * 这几个值永远是 undefined，界面上会显示成"未设引用名"（真踩过）。卡片不会为它们发写入。
+ *
+ * 副作用（有意）：volatile 字段在运行时是**稳定引用**，`config.a2a.port` 变成 `.get()` 才能取值，
+ * 因此 apply() 里一律用 live()/pickPath() 读；卡片改完会发 `loader/volatile-update`，
+ * apply() 收到后立即重新物化 config.json。
+ *
  * @param schema - schemastery 入口。
  * @returns Config Schema。
  */
 function buildConfig(schema) {
   return schema.object({
     // —— 身份 ——
-    role: schema.union(['pc1', 'pc2']).default('pc1'),
-    machine: schema.string().default(''),
+    role: schema.union(['pc1', 'pc2']).default('pc1').volatile(),
+    machine: schema.string().default('').volatile(),
 
     // —— 入站（本机服务监听）——
     a2a: schema.object({
-      host: schema.string().default('127.0.0.1'),
-      port: schema.number().step(1).min(1).max(65535).default(7310),
-      tokenFile: schema.string().default(defaultTokenFile('a2a.token')),
-      tokenRef: schema.string().default('TEAM_LINK_A2A_TOKEN'),
+      host: schema.string().default('127.0.0.1').volatile(),
+      port: schema.number().step(1).min(1).max(65535).default(7310).volatile(),
+      tokenFile: schema.string().default(defaultTokenFile('a2a.token')).volatile(),
+      tokenRef: schema.string().default('TEAM_LINK_A2A_TOKEN').volatile(),
     }),
     mcp: schema.object({
-      host: schema.string().default('127.0.0.1'),
-      port: schema.number().step(1).min(1).max(65535).default(18790),
-      tokenFile: schema.string().default(defaultTokenFile('mcp.token')),
-      tokenRef: schema.string().default('TEAM_LINK_MCP_TOKEN'),
+      host: schema.string().default('127.0.0.1').volatile(),
+      port: schema.number().step(1).min(1).max(65535).default(18790).volatile(),
+      tokenFile: schema.string().default(defaultTokenFile('mcp.token')).volatile(),
+      tokenRef: schema.string().default('TEAM_LINK_MCP_TOKEN').volatile(),
     }),
 
     // —— 出站（对端）——
     peer: schema.object({
-      name: schema.string().default('pc2'),
-      a2aUrl: schema.string().default(''),
-      mcpUrl: schema.string().default(''),
+      name: schema.string().default('pc2').volatile(),
+      a2aUrl: schema.string().default('').volatile(),
+      mcpUrl: schema.string().default('').volatile(),
       a2a: schema.object({
-        tokenFile: schema.string().default(defaultTokenFile('peer-a2a.token')),
-        tokenRef: schema.string().default('TEAM_LINK_PEER_A2A_TOKEN'),
+        tokenFile: schema.string().default(defaultTokenFile('peer-a2a.token')).volatile(),
+        tokenRef: schema.string().default('TEAM_LINK_PEER_A2A_TOKEN').volatile(),
       }),
       mcp: schema.object({
-        tokenFile: schema.string().default(defaultTokenFile('peer-mcp.token')),
-        tokenRef: schema.string().default('TEAM_LINK_PEER_MCP_TOKEN'),
+        tokenFile: schema.string().default(defaultTokenFile('peer-mcp.token')).volatile(),
+        tokenRef: schema.string().default('TEAM_LINK_PEER_MCP_TOKEN').volatile(),
       }),
     }),
 
@@ -228,17 +242,18 @@ function buildConfig(schema) {
           mode: schema.union(['ro', 'rw']).default('rw'),
         }),
       )
-      .default([]),
+      .default([])
+      .volatile(),
 
     // —— 回退通道（协作 issue 轮询）——
     fallback: schema.object({
       mode: schema.const('issue-poll').default('issue-poll'),
-      repo: schema.string().default(''),
-      issueLabel: schema.string().default('collab-audit'),
-      pollSeconds: schema.number().step(1).min(30).default(900),
+      repo: schema.string().default('').volatile(),
+      issueLabel: schema.string().default('collab-audit').volatile(),
+      pollSeconds: schema.number().step(1).min(30).default(900).volatile(),
     }),
 
-    logDir: schema.string().default('logs'),
+    logDir: schema.string().default('logs').volatile(),
   })
 }
 
@@ -793,7 +808,24 @@ export function apply(ctx, config) {
     log('warn', `team_link_setup 注册失败（已降级）: ${error?.message ?? error}`)
   }
 
-  // 3) 异步：凭据存储 → token 文件。故意不 await：不让 profile 启动等网络/IO。
+  // 3) 设置卡片改的是 volatile 字段（不重挂插件），所以必须自己接这条事件，
+  //    否则「卡片上改了没反应」—— config.json 会停在启动那一刻的旧值。
+  //    没有 Loader 的直挂场景（离线自测、别的宿主）没有这个事件，guard 一下即可。
+  if (typeof ctx?.on === 'function') {
+    try {
+      ctx.on('loader/volatile-update', () => {
+        try {
+          materializeConfigJson(rawConfig, log)
+        } catch (error) {
+          log('warn', `volatile 更新后重新物化失败（已降级）: ${error?.message ?? error}`)
+        }
+      })
+    } catch (error) {
+      log('warn', `订阅 volatile 更新失败（已降级）: ${error?.message ?? error}`)
+    }
+  }
+
+  // 4) 异步：凭据存储 → token 文件。故意不 await：不让 profile 启动等网络/IO。
   Promise.resolve()
     .then(() => syncTokenFiles(ctx, rawConfig, log))
     .catch((error) => {
