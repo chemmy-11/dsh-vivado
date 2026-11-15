@@ -94,7 +94,7 @@ no configuration, no MCP tools. Install **either** this **or** the full kit:
 
 ```sh
 # preferred: the prebuilt tarball from the release (no local HTTPS git needed)
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.3/dsh-vivado-preset-0.2.3.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.4/dsh-vivado-preset-0.2.4.tgz
 # alternative: the GitHub subdirectory URL (pnpm resolves it over HTTPS git; environments that
 # can only reach github.com over SSH fail here -- use the tarball above)
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset

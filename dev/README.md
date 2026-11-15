@@ -67,7 +67,7 @@ py <kit>\dev\validate_patch.py <work-dir>\render\accept-2023.1.yml `
 `2025.2`（或直接 `-ConfigPath <你自己的 config.yml>`）再渲染一次，`--tier 2025.2plus`。
 退出码：`0` = PASS，`1` = FAIL（逐条打印原因），`2` = 环境问题（缺 PyYAML / 文件不存在）。
 
-它校验的形态：一条 `- insert:`、预设行 `preset-vivado`（id/name/order）、22 条 shipped 插件行
+它校验的形态：一条 `- insert:`、预设行 `preset-vivado`（id/name/order）、23 条 shipped 插件行
 **按原顺序** + 末尾 `mcp-vivado`、persona 块标量里的纪律短语与**该档**的实测事实、
 `customSkillDirs` 单元素绝对 ASCII 且等于 `--expect-skills-dir`、`includeDefaultRoots` 保持缺省、
 `mcp-vivado` 的 stdio/环境变量键/TEMP=TMP/超时、除 `{{model}}` 外无残留占位符。
@@ -136,7 +136,7 @@ py <kit>\dev\accept_all.py --keep-home                         # 复用已建好
 
 ### 2.4 适配新一代 DSH（改了哪一步、为什么）
 
-DSH 升级会改**组合行为**，也可能改它自带的 shipped preset（22 行）；后者不改我们仓库的源文件就会静默带过时行。两次实测：
+DSH 升级会改**组合行为**，也可能改它自带的 shipped preset（23 行）；后者不改我们仓库的源文件就会静默带过时行。两次实测：
 
 - **2026-11-04 0.2.1-rc.3 → rc.5**：shipped preset 行**一行没变**，但 `node_modules` 的解析次序变了，
   探针 home 里一份"被 robocopy 解引用"的旧 bundle 副本压过了 profile 依赖，装完的组合检查直接失败（§8 的
@@ -149,7 +149,7 @@ DSH 升级会改**组合行为**，也可能改它自带的 shipped preset（22 
 固定动作：
 
 ```powershell
-# 1) 先对**已装 DSH** 校 shipped 22 行（唯一机器可读入口：app.asar 里的 standard.patch.yml）
+# 1) 先对**已装 DSH** 校 shipped 23 行（唯一机器可读入口：app.asar 里的 standard.patch.yml）
 py <kit>\tools\make_template.py --sync-shipped --check --dsh-install <DSH 安装根>
 #    有变就重生成模板 + 审计件，再看 diff 确认上游到底改了什么
 py <kit>\tools\make_template.py --sync-shipped --dsh-install <DSH 安装根>
@@ -232,7 +232,7 @@ py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dum
 | `templates/preset.patch.yml.tmpl` | `static`，**两档都要过** | 模板一处漂移会同时影响两档 |
 | `templates/persona/<tier>.frag.yml` | `static`，**两档都要过** | 只改一档 = 两档纪律开始分叉（[docs/architecture.md](../docs/architecture.md) §10） |
 | `tools/vivado-*.ps1`、`lib/common.ps1` 的运行辅助段 | `--only static` + 手工真跑 `vivado-probe.ps1` / `tcl-check.ps1` | `static` 只验在场与 ASCII；真跑才会暴露 WinPS 5.1 的退出码/引号坑 |
-| `tools/make_template.py`、shipped 22 行审计件 | `--only static`；升级 DSH 后另跑 `--sync-shipped --check --dsh-install <DSH>` | 模板/审计件/生成器三者互相钉死；asar 同步检查保证 22 行跟着宿主走 |
+| `tools/make_template.py`、shipped 23 行审计件 | `--only static`；升级 DSH 后另跑 `--sync-shipped --check --dsh-install <DSH>` | 模板/审计件/生成器三者互相钉死；asar 同步检查保证 22 行跟着宿主走 |
 | `templates/preset.patch.yml.tmpl` 的 shipped 行、`skills/**` | `--only static`（含 `tools\build_preset_package.py`） | `packages/dsh-vivado-preset/` 是从这两处生成的，改一处不重生成 = 独立预设包漂移 |
 | `packages/dsh-vivado-preset/` 的 `persona.txt` / `README.md` / `package.json` | `--only static` + 隔离 home 里 `dsh plugin add` 一次 | 手写件不参与生成，但 `package.json` 的 `dsh.bundle` / 版本一致性由 `--check` 把关 |
 | `skills/**` | `--only static` + `doctor.ps1` 第 13 项 | `MANIFEST.json` 由生成器唯一产出，禁手写 |
@@ -248,7 +248,7 @@ py <kit>\dev\validate_schema.py --schema <home>\schema.json --entries <home>\dum
 # 0) 便宜的门禁（与 docs/architecture.md §10 一致）
 py <kit>\tools\make_template.py --check
 py <kit>\tools\gen_skills_manifest.py --check
-#    刚升过 DSH 就再加一条：shipped 22 行是否仍与已装 DSH 一致
+#    刚升过 DSH 就再加一条：shipped 23 行是否仍与已装 DSH 一致
 py <kit>\tools\make_template.py --sync-shipped --check --dsh-install <DSH 安装根>
 
 # 1) 静态组：10 条，几秒钟，不需要 DSH

@@ -50,7 +50,7 @@ HEADER = """\
 # values and NO MCP row: the vivado-mcp half needs a per-machine render (Python/Vivado/TEMP paths)
 # and lives in the full kit, which is installed with install.ps1 instead.
 #
-# The 21 non-persona rows below are the shipped standard preset rows, copied verbatim from
+# The 22 non-persona rows below are the shipped standard preset rows, copied verbatim from
 # templates/preset.patch.yml.tmpl (single source; the generator fails if they drift). The persona
 # and the skill-filesystem mount are this package's own.
 - insert:

@@ -151,7 +151,7 @@ if ($bad.Count -gt 0) {
 }
 if ($out -notmatch '(?m)^- insert:') { throw 'rendered patch has no top-level "- insert:" row list' }
 $rows = [regex]::Matches($out, '(?m)^ {10}- id: (\S+)$') | ForEach-Object { $_.Groups[1].Value }
-if ($rows.Count -ne 23) { throw ("rendered patch should carry 22 shipped plugin rows + mcp-vivado = 23 rows, got {0}: {1}" -f $rows.Count, ($rows -join ',')) }
+if ($rows.Count -ne 24) { throw ("rendered patch should carry 23 shipped plugin rows + mcp-vivado = 24 rows, got {0}: {1}" -f $rows.Count, ($rows -join ',')) }
 if ($rows -notcontains 'persona') { throw 'rendered patch lost the persona row' }
 if ($rows -notcontains 'skill-filesystem') { throw 'rendered patch lost the skill-filesystem row' }
 if ($rows -notcontains 'mcp-vivado') { throw 'rendered patch lost the mcp-vivado row' }
@@ -167,6 +167,6 @@ if (-not [string]::IsNullOrWhiteSpace($outDir) -and -not (Test-Path -LiteralPath
 $enc = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($OutFile, $out, $enc)
 
-Say PASS ("rendered {0} ({1} bytes, tier {2}, 22 plugin rows)" -f $OutFile, (Get-Item -LiteralPath $OutFile).Length, $tier)
+Say PASS ("rendered {0} ({1} bytes, tier {2}, 23 plugin rows)" -f $OutFile, (Get-Item -LiteralPath $OutFile).Length, $tier)
 Say INFO ("skills dir mounted at rank 300: {0}" -f $skillsSlash)
 Say INFO ("mcp-vivado: {0} -m vivado_mcp (cwd {1})" -f $values['MCP_PYTHON'], $values['MCP_CWD'])

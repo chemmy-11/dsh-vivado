@@ -11,7 +11,7 @@ What it asserts
     * the file is YAML with DSH's custom `!!js` tag (registered, not rejected), LF, no BOM;
     * top level is a one-element list holding `- insert:`;
     * the single inserted row is the `preset-vivado` agent preset (id / name / order);
-    * the preset carries exactly the 22 shipped plugin rows, in shipped order, plus
+    * the preset carries exactly the 23 shipped plugin rows, in shipped order, plus
       `mcp-vivado` last;
     * the persona is a long block scalar, keeps every required discipline phrase, and states
       the version-tier facts that `--tier` expects;
@@ -60,14 +60,15 @@ except ModuleNotFoundError:
     )
     raise SystemExit(2)
 
-# The 22 shipped plugin rows of the DSH `standard` preset, in shipped order. They are a
-# byte-for-byte extraction (templates/shipped-standard-22rows.yml); the preset appends
-# `mcp-vivado` as row 23.
+# The 23 shipped plugin rows of the DSH `standard` preset, in shipped order. They are a
+# byte-for-byte extraction (templates/shipped-standard-23rows.yml); the preset appends
+# `mcp-vivado` as row 24.
 SHIPPED_ROWS = [
     "persona", "agent-instructions", "time-context", "tool-bash", "tool-pwsh", "tool-fs",
     "tool-fs-search", "tool-jobs", "tool-schedule", "skill-filesystem", "tool-skill",
     "command-goal", "tool-goal", "planning", "compaction", "delegation", "tool-ask-user",
-    "tool-todo", "tool-web", "present", "tool-plugin-manager", "tool-plugin-market",
+    "tool-todo", "tool-web", "present", "tool-office", "tool-plugin-manager",
+    "tool-plugin-market",
 ]
 
 # Discipline phrases the persona must keep whatever the tier is. Losing one of these is a
@@ -215,7 +216,7 @@ def main() -> int:
         problems.append("preset config.plugins must be a list")
         return report(checks, problems)
 
-    # ---- the 22 shipped rows + mcp-vivado --------------------------------------------------
+    # ---- the 23 shipped rows + mcp-vivado --------------------------------------------------
     row_ids = [p.get("id") for p in plugins if isinstance(p, dict)]
     want_ids = SHIPPED_ROWS + ["mcp-vivado"]
     if row_ids != want_ids:

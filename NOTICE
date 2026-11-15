@@ -99,7 +99,7 @@
 
 下表内容**均为本 kit 原创**（无第三方代码、无 AMD/Xilinx 代码、无许可证密钥、不含 Vivado 本体或其许可文件）；
 许可条款见根目录 `LICENSE` = **MIT**（`Copyright (c) 2026 chemmy-11`）。注意 MIT **只覆盖我们自己写的那部分**：
-上面 §1（AMD 技能，MIT © AMD）、§2（vivado-mcp 补丁所改的上游代码，Apache-2.0）、§3.1（22 行 shipped 插件行，MIT © DeepSeek）
+上面 §1（AMD 技能，MIT © AMD）、§2（vivado-mcp 补丁所改的上游代码，Apache-2.0）、§3.1（23 行 shipped 插件行，MIT © DeepSeek）
 各自保留自己的许可，`LICENSE` 的「适用范围」一节逐项列明。
 
 ### 3.0 授权范围（`LICENSE` = MIT，但只管我们原创的部分）
@@ -114,7 +114,7 @@
 | 内容 | 许可 | 条款与证据 |
 |---|---|---|
 | `skills/{hw-ila-debug,hw-vio-debug,vivado-revision-control,vivado-rtl-elaboration-analysis,vivado-rtl-lint,vivado-simulate-rtl}/**`（AMD 官方技能） | **MIT**，© 2026 Advanced Micro Devices, Inc. | 附录 A；来源与改动见 §1 |
-| 取自 DeepSeek Harness 的 **22 条 shipped 插件行** | **MIT**，© 2026 DeepSeek | 附录 C；证据见 §3.1 |
+| 取自 DeepSeek Harness 的 **23 条 shipped 插件行** | **MIT**，© 2026 DeepSeek | 附录 C；证据见 §3.1 |
 | `patches/vivado-mcp/*.patch` **所修改的上游代码**（`vivado-mcp` 0.3.26，本仓库不含其源码） | **Apache-2.0** | `patches/vivado-mcp/LICENSE-APACHE-2.0.txt`；义务见 §2.1 |
 | `icon.png`（本包在插件列表里显示的图标） | **不属 MIT**：它是**基于 Vivado 三平面标志重上色**的二次创作；Vivado / Xilinx 标志的著作权与商标归 AMD | 只用于**指称**本包所服务的 Vivado 工具（见 §3.2）；如 AMD 提出异议将替换为不含其标志的原创图标；对外商业分发前建议先换成原创图形 |
 
@@ -124,10 +124,10 @@
 
 | 路径 | 内容 | 是否含第三方内容 |
 |---|---|---|
-| `package.json` / `cordis.patch.yml`（渲染产物）/ `config.example.yml` | bundle 清单、会话预设 patch、环境配置样例 | **是，见 §3.1**（22 行 shipped 插件清单取自 DSH 安装包） |
+| `package.json` / `cordis.patch.yml`（渲染产物）/ `config.example.yml` | bundle 清单、会话预设 patch、环境配置样例 | **是，见 §3.1**（23 行 shipped 插件清单取自 DSH 安装包） |
 | `install.ps1` / `uninstall.ps1` / `doctor.ps1` / `lib/common.ps1` | 安装、卸载、体检脚本（Windows PowerShell 5.1；仅用内置 cmdlet） | 否 |
 | `tools/render_patch.ps1` / `tools/make_template.py` / `tools/gen_skills_manifest.py` | 渲染器、模板生成器、清单门禁生成器 | 否（仅 PowerShell/Python 标准库） |
-| `templates/preset.patch.yml.tmpl` / `templates/shipped-standard-22rows.yml` / `templates/persona/*.frag.yml` | 预设模板、shipped 22 行快照、版本分档 persona 片段 | **模板里的 22 行插件清单见 §3.1** |
+| `templates/preset.patch.yml.tmpl` / `templates/shipped-standard-23rows.yml` / `templates/persona/*.frag.yml` | 预设模板、shipped 23 行快照、版本分档 persona 片段 | **模板里的 23 行插件清单见 §3.1** |
 | `docs/version-matrix.md` / `docs/*.md` / `README.md` / `NOTICE` / `LICENSE` | 文档 | 否 |
 | `patches/vivado-mcp/*.patch` / `patches/vivado-mcp/README.md` | 我们自己写的补丁文本 | 补丁**内容**改动的是第三方文件（见 §2），补丁文本与说明为本 kit 原创 |
 | `skills/amd-doc-search/**` | 自研技能：hosted 文档检索的 stdlib 客户端桥（`doc_search.py`） | 否 |
@@ -136,10 +136,10 @@
 
 ### 3.1 取自 DeepSeek Harness 的配置数据（MIT —— **不是**「无主内容」）
 
-`templates/preset.patch.yml.tmpl`（及由其渲染的 `cordis.patch.yml`）里的 **22 条 shipped 插件行**
+`templates/preset.patch.yml.tmpl`（及由其渲染的 `cordis.patch.yml`）里的 **23 条 shipped 插件行**
 （`persona` … `tool-plugin-market`），是从**运行中的 DeepSeek Harness 安装包自带**的
 `dsh-web-app/presets/standard.patch.yml` **原样提取**的（提取方式是 `tools/make_template.py` 直接只读解析
-`app.asar`，命令 `--sync-shipped --dsh-install <DSH 安装根>`）。审计件 `templates/shipped-standard-22rows.yml`
+`app.asar`，命令 `--sync-shipped --dsh-install <DSH 安装根>`）。审计件 `templates/shipped-standard-23rows.yml`
 存的是其中 21 行逐字节内容（persona 行在渲染时被本 kit 的版本分档片段替换，不随包分发）。
 
 **它的许可不是「未知」，是 MIT**（2026-10-24 直接核对，命令见 `docs/licensing.md` §2）：
@@ -149,12 +149,12 @@
 | `app.asar` 顶层 `package.json` | `"name": "@deepseek-ai/dsh-desktop"`, **`"license": "MIT"`** |
 | `app.asar :: dsh/node_modules/@deepseek-ai/dsh/package.json` | `@deepseek-ai/dsh-desktop-runtime`（无 license 字段） |
 | `app.asar :: dsh/node_modules/@deepseek-ai/dsh/LICENSE` | `MIT License` / `Copyright (c) 2026 DeepSeek` |
-| `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/package.json` | **`"license": "MIT"`**（22 行就出自这个包） |
+| `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/package.json` | **`"license": "MIT"`**（23 行就出自这个包） |
 | `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/LICENSE` | `MIT License` / `Copyright (c) 2026 DeepSeek` |
 | 安装目录 | 无适用 EULA：`D:\dsh` 下只有 `LICENSE.electron.txt` / `LICENSES.chromium.html` / 7zip 的许可文本（都是第三方依赖），未见 DSH 自身的专有协议 |
 
 ⇒ MIT 允许再分发与修改，唯一实质义务是**保留版权声明与许可声明** → 本文件**附录 C** 收录 DeepSeek 的 MIT 通知。
-我们只取「生成同版本预设所需的 22 条插件行」，不分发 DSH 的运行时、CLI 或界面代码。
+我们只取「生成同版本预设所需的 23 条插件行」，不分发 DSH 的运行时、CLI 或界面代码。
 
 升级 DSH 后该清单可能变化：重跑 `tools/make_template.py --sync-shipped --dsh-install <DSH 安装根>` 即可按新 DSH 的
 shipped 预设重新抽取（先用 `--sync-shipped --check` 看是否真的变了）；模板文件头里记录了抽取来源与 sha256。
@@ -221,7 +221,7 @@ py <kit>\tools\gen_skills_manifest.py --check
 
 ---
 
-## 附录 C — MIT 许可全文（适用于取自 DeepSeek Harness 的 22 条 shipped 插件行）
+## 附录 C — MIT 许可全文（适用于取自 DeepSeek Harness 的 23 条 shipped 插件行）
 
 ```text
 MIT License

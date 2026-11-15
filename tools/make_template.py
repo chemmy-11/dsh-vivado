@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 r"""make_template.py — 生成 dsh-vivado 的**唯一**模板 `templates/preset.patch.yml.tmpl`
-（带 {{PLACEHOLDER}}），并同时落一份 22 条 shipped 插件行的溯源审计件
-`templates/shipped-standard-22rows.yml`。
+（带 {{PLACEHOLDER}}），并同时落一份 23 条 shipped 插件行的溯源审计件
+`templates/shipped-standard-23rows.yml`。
 
 两条生成路径（都**只做两处允许的改动**，其余字符逐字节保留）：
   ① `--sync-shipped --dsh-install <DSH 安装根>`（2026-11-06 新增；DSH 升级后的标准动作）
      直接从已装 DSH 的 `<DSH>\resources\app.asar`
      :: `dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml`
-     取 22 条 shipped 行。这是**唯一机器可读的权威源**：换 DSH 版本后先跑这一步，
+     取 23 条 shipped 行。这是**唯一机器可读的权威源**：换 DSH 版本后先跑这一步，
      再 `git diff templates/` 看上游到底改了哪几行（0.2.2-rc.1 实测改了 3 行，见 dev/README §2.4）。
-  ② `--source <bundle patch>`（历史路径：作者本机已实证的现役 bundle，须含 23 条顶层行 = 22 + mcp）。
+  ② `--source <bundle patch>`（历史路径：作者本机已实证的现役 bundle，须含 24 条顶层行 = 23 + mcp）。
 允许的改动：
      - 把 persona 行那一块替换成 {{PERSONA_BLOCK}}（由 templates/persona/<tier>.frag.yml 提供）；
      - 给 skill-filesystem 行加 config.customSkillDirs（rank 300 自定义技能根）。
@@ -44,7 +44,7 @@ DEFAULT_SRC = None
 # 任何 "<盘符>:\Users\<名字>\" 形态的个人路径：用来兜住作者账号名，而不把名字硬编码进随包工具。
 HOME_PATH_RE = re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/\s\"']+[\\/]")
 
-SHIPPED_OUT = TPL / "shipped-standard-22rows.yml"
+SHIPPED_OUT = TPL / "shipped-standard-23rows.yml"
 TMPL_OUT = TPL / "preset.patch.yml.tmpl"
 
 PERSONA_MARK = "          - id: persona"
@@ -73,45 +73,45 @@ SHIPPED_ASAR_ENTRY = "dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard
 # provenance 文案（模板头 / 审计件头），两条生成路径各一份
 # ---------------------------------------------------------------------------
 LEGACY_TMPL_PROVENANCE = (
-    "# 模板由 tools/make_template.py 生成：22 条 shipped 插件行原样取自已实证的现役 bundle\n"
+    "# 模板由 tools/make_template.py 生成：23 条 shipped 插件行原样取自已实证的现役 bundle\n"
     "#   作者本机笔记库\\.dsh\\bundles\\vivado-preset\\cordis.patch.yml（作者本机路径，不属于本分发件）\n"
     "#   （该文件已自证与 shipped dsh-web-app/presets/standard.patch.yml 逐字节一致，\n"
     "#     见 作者本机的规范化取证记录（未随仓库发布） §2.2）\n"
 )
 ASAR_TMPL_PROVENANCE = (
-    "# 模板由 tools/make_template.py 生成：22 条 shipped 插件行原样取自已装 DSH 的 app.asar\n"
+    "# 模板由 tools/make_template.py 生成：23 条 shipped 插件行原样取自已装 DSH 的 app.asar\n"
     "#   <DSH 安装根>\\resources\\app.asar\n"
     "#     :: dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml\n"
     "#   换 DSH 版本后重跑 py tools\\make_template.py --sync-shipped --dsh-install <DSH 安装根>，\n"
     "#   再 review templates/ 的 git diff（上游改了哪几行一目了然）。\n"
 )
 
-LEGACY_AUDIT_HEADER = """# shipped-standard-22rows.yml -- provenance audit copy (NOT an install input).
+LEGACY_AUDIT_HEADER = """# shipped-standard-23rows.yml -- provenance audit copy (NOT an install input).
 #
-# This file exists to prove that the 22 plugin rows inside the rendered patch are the shipped
+# This file exists to prove that the 23 plugin rows inside the rendered patch are the shipped
 # `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` content, not hand-copied text.
 # Source: the previously verified project-local bundle patch
 #   作者本机笔记库\\.dsh\\bundles\\vivado-preset\\cordis.patch.yml
 #   (proven byte-identical to the shipped preset in
 #    作者本机的规范化取证记录（未随仓库发布） §2.2)
-# Rows 2-22 below are byte-identical to that source (line endings normalized to LF).
+# Rows 2-23 below are byte-identical to that source (line endings normalized to LF).
 # The persona row is intentionally replaced by a comment: the pre-kit persona was OUR text and
 # carried the author's absolute paths, so it must not travel inside a distributed kit.
-# sha256 of the full verbatim 22 rows (persona included, LF-normalized):
+# sha256 of the full verbatim 23 rows (persona included, LF-normalized):
 
 """
-ASAR_AUDIT_HEADER = """# shipped-standard-22rows.yml -- provenance audit copy (NOT an install input).
+ASAR_AUDIT_HEADER = """# shipped-standard-23rows.yml -- provenance audit copy (NOT an install input).
 #
-# This file exists to prove that the 22 plugin rows inside the rendered patch are the shipped
+# This file exists to prove that the 23 plugin rows inside the rendered patch are the shipped
 # `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` content, not hand-copied text.
 # Source: <DSH>/resources/app.asar
 #   :: dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml
 #   (extracted from the installed DSH; replay:
 #    py tools\\make_template.py --sync-shipped --dsh-install <DSH>)
-# Rows 2-22 below are byte-identical to that source (line endings normalized to LF).
+# Rows 2-23 below are byte-identical to that source (line endings normalized to LF).
 # persona row omitted from this audit copy: the shipped persona row is replaced at render time
 # by templates/persona/<tier>.frag.yml, so it is not kit content.
-# sha256 of the full verbatim 22 rows (persona included, LF-normalized):
+# sha256 of the full verbatim 23 rows (persona included, LF-normalized):
 
 """
 
@@ -151,7 +151,11 @@ def read_asar_entry(asar: Path, entry_suffix: str) -> bytes:
         raise SystemExit(f"[ERROR] {asar} 太短，不是 asar")
     header_size = struct.unpack_from("<I", data, 4)[0]
     data_offset = 8 + header_size
-    header = json.loads(data[16:data_offset].decode("utf-8"))
+    # The JSON string length is its own u32; newer DSH builds pad the header area to a 4-byte
+    # boundary, so slicing data[16:data_offset] would carry 1-3 trailing NULs ("Extra data").
+    str_len = struct.unpack_from("<I", data, 12)[0]
+    header_text = data[16:16 + str_len].decode("utf-8", errors="strict")
+    header = json.loads(header_text)
 
     def walk(node: dict, prefix: str):
         for name, meta in (node.get("files") or {}).items():
@@ -169,8 +173,42 @@ def read_asar_entry(asar: Path, entry_suffix: str) -> bytes:
     raise SystemExit(f"[ERROR] {asar} 里找不到条目 {entry_suffix}")
 
 
+def _row_bounds(lines: list[str], row_id: str, indent: int = 10) -> tuple[int, int]:
+    """Line span [start, end) of one top-level `- id:` row."""
+    prefix = " " * indent + "- id: " + row_id
+    start = next(i for i, line in enumerate(lines) if line == prefix)
+    end = next((i for i in range(start + 1, len(lines))
+                if lines[i].startswith(" " * indent + "- id: ")), len(lines))
+    return start, end
+
+
+def strip_row_config(text: str, row_id: str, indent: int = 10) -> str:
+    """Return `text` with one row's `config:` block removed.
+
+    DSH 0.2.2-rc.3's shipped `skill-filesystem` row carries its own config
+    (`customSkillDirs: !!js ...`). The kit replaces that block with its staging skills dir, so the
+    provenance comparison (template vs audit) must compare the rows without that block.
+    """
+    lines = text.split("\n")
+    start, end = _row_bounds(lines, row_id, indent)
+    out = lines[:start]
+    i = start
+    while i < end:
+        line = lines[i]
+        if line.strip() == "config:" and (len(line) - len(line.lstrip())) == indent + 2:
+            i += 1
+            while i < end and (lines[i].strip() == ""
+                               or (len(lines[i]) - len(lines[i].lstrip())) > indent + 2):
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+    out.extend(lines[end:])
+    return "\n".join(out)
+
+
 def shipped_rows_block(text: str) -> str:
-    """从 shipped `standard.patch.yml` 里取出 22 条插件行（10 空格缩进）的逐字节文本。"""
+    """从 shipped `standard.patch.yml` 里取出 23 条插件行（10 空格缩进）的逐字节文本。"""
     lines = norm(text).split("\n")
     try:
         start = next(i for i, ln in enumerate(lines) if re.match(r"^ {10}- id: (\S+)$", ln))
@@ -189,8 +227,8 @@ def shipped_rows_block(text: str) -> str:
         block.pop()
     shipped = "\n".join(block) + "\n"
     ids = re.findall(r"^ {10}- id: (\S+)$", shipped, re.M)
-    if len(ids) != 22:
-        raise SystemExit(f"[ERROR] shipped 行数 {len(ids)} != 22: {ids}")
+    if len(ids) != 23:
+        raise SystemExit(f"[ERROR] shipped 行数 {len(ids)} != 23: {ids}")
     return shipped
 
 
@@ -215,18 +253,18 @@ def split_sections(text: str):
     ids = [(i, re.match(r"^ {10}- id: (\S+)$", ln)) for i, ln in enumerate(lines)]
     rows = [(i, m.group(1)) for i, m in ids if m]
     names = [n for _, n in rows]
-    if len(names) != 23 or MCP_ID not in names:
-        raise SystemExit(f"[ERROR] 期望 22 条 shipped 插件行 + mcp 行（共 23 条顶层行），实际 {len(names)}: {names}")
-    if names.index(MCP_ID) != 22:
+    if len(names) != 24 or MCP_ID not in names:
+        raise SystemExit(f"[ERROR] 期望 23 条 shipped 插件行 + mcp 行（共 24 条顶层行），实际 {len(names)}: {names}")
+    if names.index(MCP_ID) != 23:
         raise SystemExit(f"[ERROR] mcp-vivado 不是最后一行：{names}")
-    plugin_rows = rows[:22]  # 22 条 shipped 插件行（不含 mcp 行）
-    return lines, ins, plugin_rows, rows[22]
+    plugin_rows = rows[:23]  # 23 条 shipped 插件行（不含 mcp 行）
+    return lines, ins, plugin_rows, rows[23]
 
 
 def compose(shipped: str, mcp: str, provenance: str, audit_header: str) -> dict[str, str]:
-    """把 22 条 shipped 行 + mcp 块拼成模板/审计件（两条生成路径共用的唯一出口）。"""
+    """把 23 条 shipped 行 + mcp 块拼成模板/审计件（两条生成路径共用的唯一出口）。"""
     n_rows = len(re.findall(r"^          - id: ", shipped, re.M))
-    assert n_rows == 22, f"[ERROR] shipped 行数 {n_rows} != 22"
+    assert n_rows == 23, f"[ERROR] shipped 行数 {n_rows} != 23"
 
     # --- ① persona 块 -> {{PERSONA_BLOCK}} ---
     persona_start = shipped.index(PERSONA_MARK)
@@ -242,14 +280,20 @@ def compose(shipped: str, mcp: str, provenance: str, audit_header: str) -> dict[
         + "{{PERSONA_BLOCK}}\n"
         + shipped[after_persona:]
     )
-    # --- ② skill-filesystem 行加 customSkillDirs ---
-    sf = (
-        "          - id: skill-filesystem\n"
-        "            name: '@deepseek-ai/dsh-skill-filesystem'\n"
+    # --- ② skill-filesystem 行：换掉 shipped 自带的 config（0.2.2-rc.3 起该行带 !!js 表达式） ---
+    # shipped 的 `customSkillDirs: !!js ...` 指向 DSH 自己的 preset 包；kit 必须指向 staging skills，
+    # 所以先删掉该行的 config 块，再插入 kit 的块（否则会出现两个 config: 键）。
+    shipped_no_cfg = strip_row_config(shipped_no_persona, SKILLFS_ID)
+    lines_sf = shipped_no_cfg.split("\n")
+    sf_start, sf_end = _row_bounds(lines_sf, SKILLFS_ID)
+    name_idx = next((i for i in range(sf_start, sf_end) if lines_sf[i].strip().startswith("name:")), None)
+    if name_idx is None:
+        raise SystemExit("[ERROR] skill-filesystem 行缺少 name:")
+    shipped_final = "\n".join(
+        lines_sf[:name_idx + 1]
+        + SKILLS_INSERT.rstrip("\n").split("\n")
+        + lines_sf[name_idx + 1:]
     )
-    if sf not in shipped_no_persona:
-        raise SystemExit("[ERROR] 找不到 skill-filesystem 行原样文本")
-    shipped_final = shipped_no_persona.replace(sf, sf + SKILLS_INSERT, 1)
 
     sha = hashlib.sha256(shipped.encode()).hexdigest()
     header = (
@@ -260,7 +304,7 @@ def compose(shipped: str, mcp: str, provenance: str, audit_header: str) -> dict[
         "# 只做两处允许的改动：persona 换成本 kit 的版本分档片段、skill-filesystem 加 customSkillDirs；\n"
         "# 末尾追加 mcp-vivado 行（硬件相关值参数化）。\n"
         "#\n"
-        "# shipped-22 行 sha256（归一 LF 后；persona 行按 shipped 原文计入，不含 skill-filesystem 改动）：\n"
+        "# shipped-23 行 sha256（归一 LF 后；persona 行按 shipped 原文计入，不含 skill-filesystem 改动）：\n"
         f"#   {sha}\n"
         "# 生效需**重启宿主**（Electron 下 dsh-hmr 不生效）；新会话创建时选 `Vivado` 预设。\n"
         "- insert:\n"
@@ -275,7 +319,7 @@ def compose(shipped: str, mcp: str, provenance: str, audit_header: str) -> dict[
         f"{shipped_final}{mcp}"
     )
     # 分发件卫生：随包文本里不许出现某台机器的用户目录或非 ASCII 路径
-    for name, blob in (("tmpl", header), ("shipped-22rows", audit)):
+    for name, blob in (("tmpl", header), ("shipped-23rows", audit)):
         hit = HOME_PATH_RE.search(blob)
         if hit:
             raise SystemExit(f"[ERROR] {name} 仍含个人路径片段 {hit.group(0)!r}，拒绝生成")
@@ -284,18 +328,18 @@ def compose(shipped: str, mcp: str, provenance: str, audit_header: str) -> dict[
 
 
 def build(src: Path) -> dict[str, str]:
-    """历史路径：从已实证的现役 bundle patch（22 shipped + mcp）重新抽取。"""
+    """历史路径：从已实证的现役 bundle patch（23 shipped + mcp）重新抽取。"""
     text = read_src(src)
     lines, ins, plugin_rows, mcp_row = split_sections(text)
     body_start = plugin_rows[0][0]
     body_end = plugin_rows[-1][0]
-    # 22 条插件行块：从第一条 `- id:` 起，到下一条（mcp 行）之前的最后一个非空/非注释行
+    # 23 条插件行块：从第一条 `- id:` 起，到下一条（mcp 行）之前的最后一个非空/非注释行
     mcp_start = mcp_row[0]
-    # 回溯 mcp 行之前属于 mcp 注释块的连续 `#` 行（不属 shipped 22 行）
+    # 回溯 mcp 行之前属于 mcp 注释块的连续 `#` 行（不属 shipped 23 行）
     end = mcp_start
     while end > body_end + 1 and lines[end - 1].lstrip().startswith("#"):
         end -= 1
-    # shipped 22 行：去掉尾部空行
+    # shipped 23 行：去掉尾部空行
     block = lines[body_start:end]
     while block and block[-1].strip() == "":
         block.pop()
@@ -347,7 +391,7 @@ def build(src: Path) -> dict[str, str]:
 
 
 def sync_shipped(dsh_install: str | None, asar_path: str | None, check_only: bool) -> int:
-    """从已装 DSH 的 app.asar 重新同步 22 条 shipped 行（写模板 + 审计件）。"""
+    """从已装 DSH 的 app.asar 重新同步 23 条 shipped 行（写模板 + 审计件）。"""
     asar = Path(asar_path) if asar_path else find_asar(dsh_install)
     shipped = shipped_rows_block(read_asar_entry(asar, SHIPPED_ASAR_ENTRY).decode("utf-8"))
     tmpl_old = TMPL_OUT.read_text(encoding="utf-8")
@@ -388,7 +432,7 @@ EXPECTED_PLACEHOLDERS = {'PERSONA_BLOCK', 'SKILLS_DIR', 'MCP_PYTHON', 'MCP_SITE'
 def self_check() -> int:
     """Verify the committed template/audit pair without the (author-only) source bundle.
 
-    Checks: both files exist; the audit copy carries 21 shipped rows + the mcp row and the
+    Checks: both files exist; the audit copy carries 22 shipped rows + the mcp row and the
     template carries the same row ids in the same order plus {{PERSONA_BLOCK}}; the shipped rows
     are byte-identical between the template and the audit copy (after restoring the skills config
     insertion); the recorded shipped-22 sha256 line is present in both; the template's placeholder
@@ -407,14 +451,14 @@ def self_check() -> int:
     audit = SHIPPED_OUT.read_text(encoding="utf-8")
     audit_rows = re.findall(r"^ {10}- id: (\S+)$", audit, re.M)
     got_rows = re.findall(r"^ {10}- id: (\S+)$", tmpl, re.M)
-    # the audit copy holds the 21 shipped rows that survive (the persona row is replaced by a
+    # the audit copy holds the 22 shipped rows that survive (the persona row is replaced by a
     # comment); the template additionally carries the appended mcp-vivado row.
     if got_rows != audit_rows + [MCP_ID]:
         problems.append(f"template rows {got_rows} != audit rows + {MCP_ID} {audit_rows + [MCP_ID]}")
     if "{{PERSONA_BLOCK}}" not in tmpl:
         problems.append("template lost the {{PERSONA_BLOCK}} marker")
-    if len(audit_rows) != 21:
-        problems.append(f"audit copy should carry 21 shipped rows (persona excluded), got {len(audit_rows)}")
+    if len(audit_rows) != 22:
+        problems.append(f"audit copy should carry 22 shipped rows (persona excluded), got {len(audit_rows)}")
     if "persona row omitted" not in audit:
         problems.append("audit copy lost the persona-omission note")
     # template 的 shipped 行（删掉 kit 的 skill-filesystem config 插入后）与审计件必须逐字节相同
@@ -428,13 +472,15 @@ def self_check() -> int:
         if SKILLS_INSERT not in tmpl_body:
             problems.append("template lost the customSkillDirs insertion block")
         else:
-            if tmpl_body.replace(SKILLS_INSERT, "", 1) != audit_body:
+            tmpl_cmp = tmpl_body.replace(SKILLS_INSERT, "", 1)
+            audit_cmp = strip_row_config(audit_body, SKILLFS_ID)
+            if tmpl_cmp != audit_cmp:
                 problems.append("template shipped rows differ from the audit copy "
                                 "(re-run --sync-shipped, then git diff templates/)")
     sha_tmpl = re.search(r"sha256[\s\S]{0,300}?([0-9a-f]{64})", tmpl)
     sha_audit = re.search(r"sha256[\s\S]{0,300}?([0-9a-f]{64})", audit)
     if not sha_tmpl or not sha_audit:
-        problems.append("shipped-22 sha256 line missing in template or audit copy")
+        problems.append("shipped-23 sha256 line missing in template or audit copy")
     elif sha_tmpl.group(1) != sha_audit.group(1):
         problems.append(f"sha256 mismatch: template {sha_tmpl.group(1)} vs audit {sha_audit.group(1)}")
     got_ph = set(re.findall(r"\{\{(\w+)\}\}", tmpl))
@@ -462,7 +508,7 @@ def main() -> int:
                     help="path to the already-verified presets bundle patch (cordis.patch.yml); "
                          "required unless --check or --sync-shipped is given")
     ap.add_argument("--sync-shipped", action="store_true",
-                    help="resync the 22 shipped plugin rows from the installed DSH's app.asar")
+                    help="resync the 23 shipped plugin rows from the installed DSH's app.asar")
     ap.add_argument("--dsh-install", default=None, metavar="DIR",
                     help="DSH install root (contains resources\\\\app.asar); used by --sync-shipped")
     ap.add_argument("--asar", default=None, metavar="FILE",
@@ -474,7 +520,7 @@ def main() -> int:
         return self_check()
     if args.source is None:
         print("[ERROR] --source is required: point it at the verified bundle patch "
-              "(cordis.patch.yml with the 22 shipped plugin rows), or use --sync-shipped "
+              "(cordis.patch.yml with the 23 shipped plugin rows), or use --sync-shipped "
               "--dsh-install <DSH>", file=sys.stderr)
         return 2
     built = build(Path(args.source))

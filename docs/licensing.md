@@ -10,7 +10,7 @@
 | # | 上游 | 版本/身份 | 许可 | 我们分发什么 | 允许？ | 义务 | 状态 |
 |---|---|---|---|---|---|---|---|
 | 1 | **AMD 官方技能**（6 件） | `vivado-ai-extension-2026.9.1.vsix :: extension/resources/plugin-bundled/skills/**` | **MIT**（© 2026 Advanced Micro Devices, Inc.） | `skills/<6 个目录>/**`（逐字节 + 我们改的 7 个文件） | ✅ | 保留版权+许可声明；标明改动 | ✅ `NOTICE` §1.2/§1.3 + 附录 A |
-| 2 | **DeepSeek Harness**（DSH） | `@deepseek-ai/dsh-desktop` / `@deepseek-ai/dsh-web-app` 0.2.2-rc.1 | **MIT**（© 2026 DeepSeek） | 22 条 shipped 插件行（预设 patch 片段） | ✅ | 保留版权+许可声明 | ✅ `NOTICE` §3.1 + 附录 C |
+| 2 | **DeepSeek Harness**（DSH） | `@deepseek-ai/dsh-desktop` / `@deepseek-ai/dsh-web-app` 0.2.2-rc.1 | **MIT**（© 2026 DeepSeek） | 23 条 shipped 插件行（预设 patch 片段） | ✅ | 保留版权+许可声明 | ✅ `NOTICE` §3.1 + 附录 C |
 | 3 | **vivado-mcp** | 0.3.26（`mapleleavessssssss-wq/vivado-mcp`，Apache-2.0，作者 NJ） | **Apache-2.0** | **只发 4 个 `.patch`**，不分发其源码 | ✅ | §4(a) 随附许可证全文；§4(b) 改动标记；§4(c) 保留声明；§4(d) 上游无 NOTICE；§6 无商标授权 | ✅ `patches/vivado-mcp/LICENSE-APACHE-2.0.txt` + README §3.5 |
 
 **不随包分发**（因此不构成本 kit 的许可问题）：Vivado 本体与许可证、AMD entitlement、任何密钥/token、
@@ -57,7 +57,7 @@
 
 ---
 
-## 2. DeepSeek Harness 的 22 条插件行（MIT）
+## 2. DeepSeek Harness 的 23 条插件行（MIT）
 
 ### 2.1 事实（直接读安装包，不看网页）
 
@@ -66,20 +66,20 @@
 | 桌面外壳 | `app.asar :: package.json` | `"name": "@deepseek-ai/dsh-desktop"`, **`"license": "MIT"`**, version `0.2.2-rc.1` |
 | 运行时包 | `app.asar :: dsh/package.json` | `@deepseek-ai/dsh-desktop-runtime`（**无** `license` 字段） |
 | 运行时许可文件 | `app.asar :: dsh/node_modules/@deepseek-ai/dsh/LICENSE` | `MIT License` / `Copyright (c) 2026 DeepSeek` |
-| **22 行的出处包** | `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/package.json` | **`"license": "MIT"`** |
+| **23 行的出处包** | `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/package.json` | **`"license": "MIT"`** |
 | 该包的许可文件 | `app.asar :: dsh/node_modules/@deepseek-ai/dsh-web-app/LICENSE` | `MIT License` / `Copyright (c) 2026 DeepSeek` |
 | 安装目录是否有专有 EULA | `D:\dsh\` 根目录 | **没有** DSH 自身 EULA；只有 `LICENSE.electron.txt` / `LICENSES.chromium.html` / `7zip-installer-*.txt`（第三方依赖的许可文本） |
 | asar 内是否有 EULA | `asar.py ls "EULA"` | **0 hits** |
 
-⇒ 22 条插件行是 **MIT 许可的配置数据**，再分发与修改都允许；唯一实质义务是保留 DeepSeek 的版权与许可通知。
+⇒ 23 条插件行是 **MIT 许可的配置数据**，再分发与修改都允许；唯一实质义务是保留 DeepSeek 的版权与许可通知。
 
 ### 2.2 履行方式
 
 - `NOTICE` §3.1 记录来源、版本、证据与「不含 DSH 运行时/CLI/UI 代码」的边界；
 - `NOTICE` 附录 C 收录 DeepSeek 的 MIT 全文（原文取自 `@deepseek-ai/dsh/LICENSE`）。
 
-> 为什么不是「抄人家的代码」：这 22 行是**插件清单配置**（id/name/config），不是可执行代码；且 `templates/` 里保留了
-> 逐字节审计件 `shipped-standard-22rows.yml` 与 sha256，任何人可以自己从**自己的** DSH 安装里重新抽取
+> 为什么不是「抄人家的代码」：这 23 行是**插件清单配置**（id/name/config），不是可执行代码；且 `templates/` 里保留了
+> 逐字节审计件 `shipped-standard-23rows.yml` 与 sha256，任何人可以自己从**自己的** DSH 安装里重新抽取
 > （`tools/make_template.py --sync-shipped --dsh-install <DSH 安装根>`，只读解析 `app.asar`）。升级 DSH 后该清单若变化，重跑生成器即可。
 
 ---
@@ -138,7 +138,7 @@
 | 1 | 上游**改许可**或改 API | 版本已钉死（AMD vsix 2026.9.1、DSH 0.2.2-rc.1、vivado-mcp 0.3.26）；升级时按 §6 复核命令重跑，`doctor` 会报版本/补丁不符 |
 | 2 | 外层 EULA §6/§7/§9.3 被 §4.1 视为适用 | 已在 `NOTICE` §3.2 与 `LICENSE` §4 写入无担保/责任限制口径 |
 | 3 | 商标指称（AMD/Xilinx/Vivado/DeepSeek） | nominative use，无 logo，`NOTICE` §3.2 声明无隶属/背书 |
-| 4 | 22 行插件行是否算「substantial portion」 | 即便按最保守解释也已保留 MIT 通知（附录 C）；且提供自抽取路径 |
+| 4 | 23 行插件行是否算「substantial portion」 | 即便按最保守解释也已保留 MIT 通知（附录 C）；且提供自抽取路径 |
 | 5 | 本审查非法律意见 | 结论只覆盖「事实 + 我们的动作」；已尽量把义务落成可复核的文件（附录 A/C、Apache 全文、carve-out 表），但正式发布前仍建议做一次工具化 SPDX 扫描 |
 
 ---

@@ -105,7 +105,7 @@ powershell -ExecutionPolicy Bypass -File D:\dsh-vivado\install.ps1   # 幂等：
   32 个工具消失）。重跑会把**当前**运行时版本 merge 进豁免表；不想重装就手工补值（见 §4）。判断方法：
   `doctor.ps1` 第 12 项现在会 **FAIL** 并点名 `lists [...] instead of the runtime version ...`。改完 **必须重启宿主**。
   另外，DSH 升级也可能改 shipped 预设行 —— 升级后先跑 `py tools\make_template.py --sync-shipped --check --dsh-install <DSH 安装根>`
-  看 22 行有没有变（0.2.2-rc.1 实测变了 3 行，见 `dev/README.md` §2.4）。
+  看 23 行有没有变（0.2.2-rc.1 实测变了 3 行，见 `dev/README.md` §2.4）。
 - 改过 `config.yml` 后同样只需重跑安装器（或 `-RenderOnly` 刷新 staging）再重启。
 - **不想退出宿主**时的替代路径：在会话里让 agent 用 `plugin_manager`（`install_bundle` / `remove_bundle`）更新；
   这在宿主运行中也能生效，但**不刷新 staging 的文档/脚本副本**，所以仍建议按上面的流程做一次干净更新。
@@ -121,7 +121,7 @@ powershell -ExecutionPolicy Bypass -File D:\dsh-vivado\install.ps1   # 幂等：
 
 ```sh
 # 推荐：Release 预构建 tarball（不依赖本机 HTTPS git）
-dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.3/dsh-vivado-preset-0.2.3.tgz
+dsh plugin add https://github.com/chemmy-11/dsh-vivado/releases/download/v0.2.4/dsh-vivado-preset-0.2.4.tgz
 # 备选：GitHub 子目录 URL（pnpm 走 HTTPS git；本机 HTTPS 只通 SSH 时会失败）
 dsh plugin add https://github.com/chemmy-11/dsh-vivado/tree/main/packages/dsh-vivado-preset
 ```

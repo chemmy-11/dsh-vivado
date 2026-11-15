@@ -1,17 +1,17 @@
-# shipped-standard-22rows.yml -- provenance audit copy (NOT an install input).
+# shipped-standard-23rows.yml -- provenance audit copy (NOT an install input).
 #
-# This file exists to prove that the 22 plugin rows inside the rendered patch are the shipped
+# This file exists to prove that the 23 plugin rows inside the rendered patch are the shipped
 # `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` content, not hand-copied text.
 # Source: <DSH>/resources/app.asar
 #   :: dsh/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml
 #   (extracted from the installed DSH; replay:
 #    py tools\make_template.py --sync-shipped --dsh-install <DSH>)
-# Rows 2-22 below are byte-identical to that source (line endings normalized to LF).
+# Rows 2-23 below are byte-identical to that source (line endings normalized to LF).
 # persona row omitted from this audit copy: the shipped persona row is replaced at render time
 # by templates/persona/<tier>.frag.yml, so it is not kit content.
-# sha256 of the full verbatim 22 rows (persona included, LF-normalized):
+# sha256 of the full verbatim 23 rows (persona included, LF-normalized):
 
-#   b6fe694d5de6c0c91237959cbb61b7d00dc1492391c0c7a8987e7d5e204a12fa
+#   39bc47b85834b78d871000e1eea787c67bb4a3c54ae42ba4a35aa7640c9c193e
           # <persona row omitted from this audit copy: the shipped persona row is replaced
           #  at render time by templates/persona/<tier>.frag.yml, so it is not kit content.>
           - id: agent-instructions
@@ -41,6 +41,9 @@
             name: '@deepseek-ai/dsh-tool-schedule'
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: command-goal
@@ -93,6 +96,8 @@
             config:
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
+                config:
+                  interrupt: false
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
@@ -124,6 +129,8 @@
               searchTimeoutMs: 60000
           - id: present
             name: '@deepseek-ai/dsh-tool-present'
+          - id: tool-office
+            name: '@deepseek-ai/dsh-tool-office'
           - id: tool-plugin-manager
             name: '@deepseek-ai/dsh-plugin-manager/tools'
             disabled: !!js "!ctx.get('profileContext')"
