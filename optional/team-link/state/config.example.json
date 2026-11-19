@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "role": "pc1",
+  "machine": "PC1",
+  "a2a": {
+    "host": "127.0.0.1",
+    "port": 7310,
+    "path": "/",
+    "agentCardPath": "/.well-known/agent.json",
+    "tokenFile": "state/a2a.token",
+    "bindSelfLoop": "127.0.0.1"
+  },
+  "mcp": {
+    "host": "127.0.0.1",
+    "port": 18790,
+    "path": "/mcp",
+    "tokenFile": "state/mcp.token"
+  },
+  "roots": [
+    {
+      "id": "state",
+      "path": "state",
+      "mode": "rw"
+    }
+  ],
+  "evidenceDir": "",
+  "peer": {
+    "name": "pc2",
+    "wlan": "",
+    "tailscale": "",
+    "a2aUrl": "",
+    "mcpUrl": "",
+    "a2a": {
+      "tokenFile": "state/peer-a2a.token"
+    },
+    "mcp": {
+      "tokenFile": "state/peer-mcp.token"
+    },
+    "note": "a2a/mcp.tokenFile 是【对端】的 token（出站用），由人线下放入；本机自己的入站 token 见顶层 a2a/mcp.tokenFile"
+  },
+  "fallback": {
+    "mode": "issue-poll",
+    "repo": "chemmy-11/GSnFPipe-FPGA-PP",
+    "issueLabel": "collab-audit",
+    "pollSeconds": 900
+  },
+  "logDir": "logs"
+}

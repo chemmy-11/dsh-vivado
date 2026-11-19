@@ -173,6 +173,7 @@ dsh-vivado/
   templates/                preset template, shipped-22-rows audit copy, persona/ tier fragments
   skills/                   8 skills + MANIFEST.json + provenance notes
   patches/vivado-mcp/       11 optional patches + the Apache-2.0 text + apply/verify notes
+  optional/                 optional plugin collection (**not installed by default, not in the Vivado preset**); see optional/README.md
   docs/                     install, doctor, version matrix, architecture, troubleshooting, licensing
   NOTICE  LICENSE  README.md  README.en.md
 ```
@@ -192,6 +193,7 @@ dsh-vivado/
 | [`docs/licensing.md`](docs/licensing.md) | upstream license audit (AMD / DeepSeek / vivado-mcp) and our obligations |
 | [`NOTICE`](NOTICE) · [`LICENSE`](LICENSE) | provenance and change list; MIT grant plus third-party carve-outs |
 | [`dev/README.md`](dev/README.md) | Development/acceptance scripts: end-to-end verification in an isolated `DSH_HOME` (**not shipped**) |
+| [`optional/README.md`](optional/README.md) | Optional plugin collection: today only the PC1↔PC2 collaboration layer `team-link` (A2A + MCP + issue fallback). **Not installed by default, not in the Vivado preset**; each plugin ships its own `install.ps1` / `uninstall.ps1` |
 
 The detailed documents under `docs/` are currently written in Chinese; the summaries above and the
 installer/doctor output are English-friendly.
