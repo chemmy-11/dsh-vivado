@@ -15,7 +15,7 @@
 |---|---|
 | 工程 run 的综合 / 实现（标准流，`synth_1` / `impl_1`） | `run_synthesis` / `run_implementation`，**`wait: false`** 提交后用 `get_run_progress` 轮询 |
 | 脚本化插 ILA、指定 place directive、checkpoint 续跑、自定义实现段 | **项目 Tcl 脚本 + `tools/vivado-run.ps1 -Detach`**；MCP 侧等价物是 `run_tcl(script_path=..., background=true, log_file=...)`（**不需要 `start_session`**，但会起独立 Vivado batch 进程，查状态用 `job_id`）。`run_synthesis` / `run_implementation` 只驱动工程 run，盖不住这些 |
-| 只读分析：时序报告 / runme.log / `.ltx` / `.xpr` / `.bit` / VCD | `get_timing_report(report_file=...)`（P1：`include_paths=false` + `max_paths` 只回摘要）、`get_critical_warnings`、`parse_ltx`、`parse_xpr`、`parse_bit_header`、`query_waveform` |
+| 只读分析：时序报告 / runme.log / `.ltx` / `.xpr` / `.bit` / VCD | `get_timing_report(report_file=...)`（P1：`include_paths=false` + `max_paths` 只回摘要）、`parse_ltx`、`parse_xpr`、`parse_bit_header`、`query_waveform`；`get_critical_warnings` **需活会话**（`run_name` 只选 run），只想读 `runme.log` 用 `read`/`grep` |
 | XDC 静态检查 / 能安全自修的约束问题 | `xdc_lint`（纯 Python，不占 Vivado；P1：GT/MIG 良性族单独计数，头部直接给「阻断判定」）、`xdc_auto_fix(dry_run=True)` |
 | 跑脚本前先验 Tcl 语法 | **`tools/tcl-check.ps1`**（本包脚本，不占 MCP 工具面，也不起 Vivado） |
 | 上板烧写 / ILA 抓取 | `program_device` + 板上工具链（`hw-ila-debug` / `hw-vio-debug` 技能） |
@@ -36,13 +36,12 @@
 | `xdc_lint` | `xdc_paths`, `severity`, `max_items`; P1: `benign_allowlist`, `show_benign` | 纯 Python 静态检查，**不依赖 Vivado 综合****实测可用**；上游默认 `max_items=20`，本包补丁可改默认全量。P1 起内置「已知良性族」分组（GT refclk / MIG DDR4 的 `MISSING_IOSTANDARD`），头部给 benign 计数 + 「阻断判定: 不阻断 / 阻断（N 条非良性）」；`show_benign` 控制良性条是否进明细，`benign_allowlist` 追加自定义良性族。**良性 ≠ 无问题**：判"是否阻断"读头部计数，不能只看总 warning 数 |
 | `xdc_auto_fix` | `xdc_paths`, `board`, `dry_run` | 只自修 `MISSING_IOSTANDARD` / `CLOCK_NO_PERIOD` 两类；先 `dry_run=True` 看计划 |
 
-## 3. 半离线（3 个 + `run_tcl` 的脚本文件形态：给文件就离线/脱离会话，不给才要活会话）
+## 3. 半离线（2 个 + `run_tcl` 的脚本文件形态：给文件就离线/脱离会话，不给才要活会话）
 
 | 工具 | 离线形态 | 会话形态 |
 |---|---|---|
 | `get_timing_report` | `report_file=` 指向已有 `*_timing_summary_*.rpt`（**实测可用**；本包靠它抓到过 WNS 口径 bug）。P1：`include_paths=false` 只回摘要不列关键路径，`max_paths=N` 只列前 N 条；**默认仍是全量**，向后兼容 | `session_id` + `output_format` 现场取 |
 | `get_cdc_report` | `report_file=` 指向已有 CDC 报告 | `session_id` 现场跑 |
-| `get_critical_warnings` | `run_name` 读既有 `runme.log`（"仅 runme.log"） | `session_id` + `tail_n` 现场取 |
 
 `run_tcl` 的**脚本文件形态**同属这一档（不连会话，但会起一个独立 Vivado batch 进程）：
 
@@ -50,7 +49,7 @@
 |---|---|---|
 | `run_tcl` | P1：`script_path=<.tcl>` + `background=true` + `log_file=<日志路径>` ⇒ 把该文件当 batch 脚本**脱离进程树**后台跑，返回 job 标识；随后用 `job_id` 查状态与日志尾部。`stdout_tail_bytes` 按末尾字节裁**返回正文**（ERROR 行不丢）。**"已提交" ≠ "已完成"**，判进度只认日志里的标记行 | `session_id` + `command=<内联 Tcl>`，30 min 预算与体积问题见 §5 |
 
-## 4. 必须活会话（21 个：先 `start_session`，否则会报会话不存在）
+## 4. 必须活会话（22 个：先 `start_session`，否则会报会话不存在）
 
 | 分组 | 工具 |
 |---|---|
@@ -58,7 +57,7 @@
 | 任意 Tcl | `run_tcl`、`safe_tcl`（注意下面的"预算/体积"两条） |
 | 标准流运行 | `run_synthesis`、`run_implementation`、`generate_bitstream`、`program_device` |
 | 工程/报告读取 | `get_project_info`、`get_io_report`、`get_utilization_report`、`get_ip_status`、`get_run_progress`、`check_bitstream_readiness`、`get_next_suggestion`、`get_pre_commit_summary` |
-| 诊断/校验 | `verify_io_placement_tool`、`inspect_ip_params` |
+| 诊断/校验 | `verify_io_placement_tool`、`inspect_ip_params`、`get_critical_warnings`（`run_name` 只选 run，仍需会话） |
 | 波形会话操作 | `set_wave_zoom`、`set_wave_analog`（改 wcfg 后要 `close -force` + `open` 重载） |
 
 > **两处 P1 语义容易被误读，必须照抄原文**：
@@ -100,7 +99,7 @@
 
 - 每个工具**全部参数**的默认值没有逐个核对；本文只用了参数名与 docstring。
 - **P1 新增参数（2026-10-28 补丁）没有真机会话实调**：`run_tcl` 的 `script_path` / `background` / `log_file` / `stdout_tail_bytes` / `job_id`、`check_bitstream_readiness` 的 `dcp_path` / `run_name` 与 `N/A` 返回、`get_timing_report` 的 `include_paths` / `max_paths`、`xdc_lint` 的良性族 / `benign_allowlist` / `show_benign`，本文按补丁对外口径描述；首次真机使用时按"先用最小样例验一次再依赖"处理，并把实测结论补回来。
-- `get_critical_warnings` 在"只给 `run_name`、不给 `session_id`"时能否定位工程目录，未实测。
+- `get_critical_warnings` 的 `run_name` 只是**选择要诊断的 run**，不是离线入口：实现里先 `_require_session`，不给 `session_id` 时用默认 `"default"`，未 `start_session` 就返回「会话 'default' 不存在。请先调用 start_session」（2026-11-24 实测，`mcp_ctl.py call get_critical_warnings` 同样报此错）。只想读已有 `runme.log` 请用会话外的 `read` / `grep`，或先用 `parse_xpr` 定位工程路径。
 - `set_wave_zoom` / `set_wave_analog` 在无会话时能否只改文件，未实测（docstring 写的是改完要重载）。
 - `xdc_auto_fix` 的 `board` 取值集合未实测，先 `dry_run=True` 看计划再落地。
 
